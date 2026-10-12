@@ -1,0 +1,16 @@
+{
+  "name": "hiroshi-claude-mods",
+  "owner": {
+    "name": "Hiroshi"
+  },
+  "plugins": [
+    {
+      "name": "model-effort",
+      "source": "./model-effort",
+      "description": "Mostra o modelo e o effort da sessão, alinhados à direita do rodapé do prompt"
+    }
+  ],
+  "metadata": {
+    "description": "Mods pessoais do Claude Code (interface e comportamento) do Hiroshi"
+  }
+}
