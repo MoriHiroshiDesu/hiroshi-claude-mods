@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { Engine, Register } from 'claude-code'
 
 const model = atom({ plugin: 'model-effort', key: 'model' } as const, '')
 const effort = atom({ plugin: 'model-effort', key: 'effort' } as const, '')
@@ -25,19 +25,38 @@ export function label(rawModel: string, rawEffort: string): string {
   return rawEffort === '' ? modelName(rawModel) : `${modelName(rawModel)} · ${rawEffort}`
 }
 
+// The model is the session's (what /model shows); a failed read keeps the last one.
+async function sync($: Engine): Promise<void> {
+  const current = await $.session.model().catch(() => '')
+  if (current !== '') await update($, model, () => current).catch(() => {})
+}
+
 export const register: Register = on => {
-  // The model is the session's (what /model shows); read it again at each prompt so a
-  // switch shows by the next turn at the latest.
+  // Read the model at the moments it can change:
+  // the session start, a /model run, a /config row, and each prompt as a net.
   on('session.start', async ($, e, next) => {
-    const current = await $.session.model().catch(() => '')
-    if (current !== '') await update($, model, () => current).catch(() => {})
+    await sync($)
     return next(e)
+  })
+
+  // /model sets the model without a prompt or a request: read it once the command is done.
+  // A hook here gates the command, so a failed read must not break it.
+  on('command.run', { command: 'model' }, async ($, e, next) => {
+    const result = await next(e)
+    await sync($)
+    return result
+  })
+
+  // The /config Model row, when it is the one that changed.
+  on('config.set', { key: 'model' }, async ($, e, next) => {
+    const result = await next(e)
+    await sync($)
+    return result
   })
 
   // A hook on the prompt gates it: a failed read must not hold the prompt back.
   on('prompt.submit', async ($, e, next) => {
-    const current = await $.session.model().catch(() => '')
-    if (current !== '') await update($, model, () => current).catch(() => {})
+    await sync($)
     return next(e)
   })
 

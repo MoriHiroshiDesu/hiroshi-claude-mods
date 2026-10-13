@@ -1,6 +1,6 @@
 {
   "name": "model-effort",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mostra o modelo e o effort da sessão, alinhados à direita do rodapé do prompt",
   "types": "./types/index.d.ts",
   "author": {
