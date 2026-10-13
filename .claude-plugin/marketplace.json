@@ -8,6 +8,11 @@
       "name": "model-effort",
       "source": "./model-effort",
       "description": "Mostra o modelo e o effort da sessão, alinhados à direita do rodapé do prompt"
+    },
+    {
+      "name": "git-band",
+      "source": "./git-band",
+      "description": "Faixa acima do prompt com a branch ou worktree atual e uma prévia do último commit"
     }
   ],
   "metadata": {
