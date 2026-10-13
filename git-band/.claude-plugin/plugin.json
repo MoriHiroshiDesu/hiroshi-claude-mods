@@ -1,6 +1,6 @@
 {
   "name": "git-band",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Faixa acima do prompt com a branch ou worktree atual e uma prévia do último commit",
   "types": "./types/index.d.ts",
   "author": {
