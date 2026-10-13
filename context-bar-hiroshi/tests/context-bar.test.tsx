@@ -112,7 +112,7 @@ describe('context-bar', () => {
     expect(asked.length).toBe(2)
   })
 
-  test('refreshes after a compaction, once the new transcript is stored', async ($, on) => {
+  test('refreshes on the rows a compaction leaves behind, not on ordinary ones', async ($, on) => {
     const { asked } = engine(on)
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
     await settle()
@@ -123,10 +123,10 @@ describe('context-bar', () => {
     expect(asked.length).toBe(1) // an ordinary row does not ask
     await $.session.append(row('compaction', 'a1'))
     await settle()
-    expect(asked.length).toBe(1) // nor a subagent's compaction
-    await $.session.append(row('compaction'))
+    expect(asked.length).toBe(1) // nor a subagent's
+    for (const door of ['compaction', 'command', 'notice']) await $.session.append(row(door))
     await settle()
-    expect(asked.length).toBe(2)
+    expect(asked.length).toBe(4)
   })
 
   test('/context-bar hides and shows it, and remembers the choice', async ($, on) => {

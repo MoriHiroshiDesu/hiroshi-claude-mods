@@ -1,4 +1,4 @@
-// Fork of hamzafer/claude-code-mods context-bar (MIT). Change: refresh after a compaction reads the new window (session.append, door compaction).
+// Fork of hamzafer/claude-code-mods context-bar (MIT). Change: refresh after a /compact reads the new window (session.append, doors compaction, command and notice).
 // Context Bar: what is filling my context window?
 //   Above the prompt, the window as one stacked bar, a color per category as /context
 //   draws them (system prompt, tools, MCP tools, memory files, skills, messages, free),
@@ -39,11 +39,12 @@ export const register: Register = on => {
   })
 
   // A /compact empties the window without a turn ending. `session.compact` answers before the
-  // transcript is swapped, so reading usage there still sees the old window; the boundary and
-  // summary rows are appended after the swap, and that is when the new size can be read.
-  on('session.append', { door: 'compaction' }, async ($, e, next) => {
+  // transcript is swapped, and a plugin that does its own compaction may skip the compaction row,
+  // so the rows a compaction leaves behind (its boundary, the command's record, the notice) are
+  // what we read after: by then the transcript is the new one.
+  on('session.append', async ($, e, next) => {
     const r = await next(e)
-    if (!e.agentId) await refresh($).catch(() => {})
+    if (!e.agentId && (e.door === 'compaction' || e.door === 'command' || e.door === 'notice')) await refresh($).catch(() => {})
     return r
   })
 
