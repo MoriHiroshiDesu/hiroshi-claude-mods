@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Engine, Register } from 'claude-code'
+import type { Color, Engine, Register } from 'claude-code'
 
 const model = atom({ plugin: 'model-effort', key: 'model' } as const, '')
 const effort = atom({ plugin: 'model-effort', key: 'effort' } as const, '')
@@ -20,9 +20,22 @@ export function modelName(raw: string): string {
   return [family, version, context].filter(part => part !== undefined && part !== '').join(' ')
 }
 
-export function label(rawModel: string, rawEffort: string): string {
-  if (rawModel === '') return ''
-  return rawEffort === '' ? modelName(rawModel) : `${modelName(rawModel)} · ${rawEffort}`
+// Green for the lighter models and efforts, red for the heavier ones; anything else
+// (an alias with no family, a new effort name) keeps the footer's dim look.
+const light = 'success'
+const heavy = 'error'
+
+export function modelColor(rawModel: string): Color | undefined {
+  const family = modelName(rawModel).split(' ')[0]
+  if (family === 'haiku' || family === 'sonnet') return light
+  if (family === 'opus' || family === 'fable') return heavy
+  return undefined
+}
+
+export function effortColor(rawEffort: string): Color | undefined {
+  if (rawEffort === 'low' || rawEffort === 'medium' || rawEffort === 'high') return light
+  if (rawEffort === 'xhigh' || rawEffort === 'max') return heavy
+  return undefined
 }
 
 // The model is the session's (what /model shows); a failed read keeps the last one.
@@ -70,10 +83,22 @@ export const register: Register = on => {
     return yield* next(e)
   })
 
-  // The dim labels at the right of the prompt footer: one more, so it takes no extra row.
+  // The labels at the right of the prompt footer: one more, so it takes no extra row.
+  // The engine draws them as one dim string, so the colored label needs a tree of its own.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
-    const text = label(await read($, model), await read($, effort))
-    if (text === '') return next(e)
-    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, text] } })
+    const rawModel = await read($, model)
+    if (rawModel === '') return next(e)
+    const rawEffort = await read($, effort)
+    const { Text } = $.ui.resolve(e)
+    const tint = (color: Color | undefined) => (color === undefined ? { dimColor: true } : { color })
+    const others = e.props.modes.join(' & ')
+    return (
+      <Text>
+        {others === '' ? null : <Text dimColor>{`${others} & `}</Text>}
+        <Text {...tint(modelColor(rawModel))}>{modelName(rawModel)}</Text>
+        {rawEffort === '' ? null : <Text dimColor>{' · '}</Text>}
+        {rawEffort === '' ? null : <Text {...tint(effortColor(rawEffort))}>{rawEffort}</Text>}
+      </Text>
+    )
   })
 }
