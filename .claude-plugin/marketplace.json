@@ -13,6 +13,11 @@
       "name": "git-band",
       "source": "./git-band",
       "description": "Faixa acima do prompt com a branch ou worktree atual e uma prévia do último commit"
+    },
+    {
+      "name": "context-bar-hiroshi",
+      "source": "./context-bar-hiroshi",
+      "description": "Fork do context-bar (hamzafer, MIT): barra da janela de contexto acima do prompt, atualizada também depois de /compact"
     }
   ],
   "metadata": {

@@ -1,0 +1,10 @@
+{
+  "name": "context-bar-hiroshi",
+  "version": "0.1.3",
+  "description": "Fork do context-bar (hamzafer, MIT): a janela de contexto como barra empilhada acima do prompt, agora atualizada também depois de um /compact. /context-bar mostra ou esconde.",
+  "author": {
+    "name": "Hamza Zafar",
+    "url": "https://github.com/hamzafer"
+  },
+  "types": "./types/index.d.ts"
+}

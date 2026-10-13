@@ -13,3 +13,4 @@ Depois, `/reload-plugins` ou reinicie o Claude Code. Para trazer versões novas:
 |-----|-----------|
 | `model-effort` | Mostra o modelo e o effort da sessão, alinhados à direita do rodapé do prompt (`sonnet 5.5 · high`). |
 | `git-band` | Uma linha acima do prompt em 4 colunas: branch ou worktree (↑↓), alterações não commitadas por cor, último commit e as linhas `+`/`-` dele. |
+| `context-bar-hiroshi` | Fork do `context-bar` do hamzafer (MIT): a janela de contexto como barra empilhada acima do prompt, agora atualizada também depois de um `/compact`. `/context-bar` mostra ou esconde. |
