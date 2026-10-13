@@ -67,16 +67,22 @@ export type Seg = { text: string; color?: string; bold?: boolean; dim?: boolean 
 const width = (segs: Seg[]) => segs.reduce((sum, seg) => sum + seg.text.length, 0)
 const SEP: Seg = { text: ' │ ', dim: true }
 
+// A worktree folder usually repeats its branch ("dark-mode" for "refactor/dark-mode").
+const repeatsBranch = (git: GitInfo) =>
+  git.worktree !== undefined && (git.head === git.worktree || git.head.endsWith(`/${git.worktree}`))
+
 // Column 1. The main checkout shows its branch; a linked worktree shows its folder first,
-// in another color and glyph, then the branch it has checked out.
+// in another color and glyph, then the branch it has checked out. When the folder only
+// repeats the branch, just the glyph marks the worktree.
 export function placeColumn(git: GitInfo): Seg[] {
   const branch: Seg = {
     text: `${git.isDetached ? '◆' : '⎇'} ${git.head}`,
     color: git.isDetached ? 'yellow' : 'cyan',
     bold: git.worktree === undefined,
   }
+  const folder = git.worktree === undefined ? '' : repeatsBranch(git) ? '' : `${git.worktree} `
   const segs: Seg[] =
-    git.worktree === undefined ? [branch] : [{ text: `❖ ${git.worktree} `, color: 'magenta', bold: true }, branch]
+    git.worktree === undefined ? [branch] : [{ text: `❖ ${folder}`, color: 'magenta', bold: true }, branch]
   if (git.ahead > 0) segs.push({ text: ` ↑${git.ahead}`, color: 'green' })
   if (git.behind > 0) segs.push({ text: ` ↓${git.behind}`, color: 'red' })
   return segs

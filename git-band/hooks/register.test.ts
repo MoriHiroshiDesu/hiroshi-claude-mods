@@ -57,6 +57,9 @@ test('clip cuts with an ellipsis', () => {
 test('column 1 tells the main checkout from a linked worktree', () => {
   expect(text(placeColumn(base))).toBe('⎇ main')
   expect(text(placeColumn({ ...base, worktree: 'feat-x', head: 'feat/x' }))).toBe('❖ feat-x ⎇ feat/x')
+  expect(text(placeColumn({ ...base, worktree: 'dark-mode', head: 'refactor/dark-mode' }))).toBe('❖ ⎇ refactor/dark-mode')
+  expect(text(placeColumn({ ...base, worktree: 'main', head: 'main' }))).toBe('❖ ⎇ main')
+  expect(text(placeColumn({ ...base, worktree: 'mode', head: 'refactor/dark-mode' }))).toBe('❖ mode ⎇ refactor/dark-mode')
   expect(text(placeColumn({ ...base, ahead: 2, behind: 1 }))).toBe('⎇ main ↑2 ↓1')
   expect(placeColumn({ ...base, worktree: 'w' })[0]?.color).toBe('magenta')
   expect(placeColumn(base)[0]?.color).toBe('cyan')
