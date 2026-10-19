@@ -1,0 +1,9 @@
+{
+  "name": "filetree-hiroshi",
+  "version": "0.1.0",
+  "description": "Árvore de arquivos da sessão num painel lateral, mostrando onde o agente lê e escreve e os diffs que ele faz. Inspirado no claude-code-filetree (data-goblin, MIT).",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Hiroshi"
+  }
+}

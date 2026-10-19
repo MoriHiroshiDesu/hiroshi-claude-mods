@@ -18,6 +18,11 @@
       "name": "context-bar-hiroshi",
       "source": "./context-bar-hiroshi",
       "description": "Fork do context-bar (hamzafer, MIT): barra da janela de contexto acima do prompt, atualizada também depois de /compact"
+    },
+    {
+      "name": "filetree-hiroshi",
+      "source": "./filetree-hiroshi",
+      "description": "Árvore de arquivos da sessão num painel lateral: status git, onde o agente lê e escreve, modo foco e os diffs de cada arquivo escrito"
     }
   ],
   "metadata": {
