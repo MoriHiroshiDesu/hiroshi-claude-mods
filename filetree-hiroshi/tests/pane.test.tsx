@@ -29,7 +29,7 @@ function gitOut(argv: readonly string[]) {
 }
 
 // Stands for the engine beneath the mod.
-function engine(on: any, repo = true) {
+function engine(on: any, repo = true, extra: FsEntry[] = []) {
   const clock = mock.clock(on)
   mock.env(on, { HOME: '/home/u' })
   const listed: string[] = []
@@ -42,7 +42,7 @@ function engine(on: any, repo = true) {
   on('classic.FileChanged', () => ({}))
   on('fs.list', (_$: any, e: any) => {
     listed.push(e.path)
-    return { value: DISK[e.path] ?? [] }
+    return { value: [...(DISK[e.path] ?? []), ...(e.path === '/work' ? extra : [])] }
   })
   on('fs.exists', (_$: any, e: any) => ({ value: e.path in DISK || Object.entries(DISK).some(([d, es]) => es.some(f => `${d}/${f.name}` === e.path)) }))
   on('process.run', (_$: any, e: any) => (e.argv.includes('status') && statuses.push(1), {
@@ -60,8 +60,10 @@ function engine(on: any, repo = true) {
 
 const start = ($: any) => $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
 const filetree = ($: any) => $.command.run({ command: 'filetree', args: '', columns: 160 } as any)
-const mount = ($: any) => $.ui.mount({ plugin: PANE, surface: 'terminal', component: 'Pane', requestId: PANE, props } as any)
-const rowTexts = async (ui: any) => (await ui.findAll({ type: 'Button' })).map((b: any) => b.text)
+const mount = ($: any, bodyRows = 30) =>
+  $.ui.mount({ plugin: PANE, surface: 'terminal', component: 'Pane', requestId: PANE, props: { ...props, scroll: { offset: 0, bodyRows } } } as any)
+// The tree's rows: every Button but the focus toggle.
+const rowTexts = async (ui: any) => (await ui.findAll({ type: 'Button' })).map((b: any) => b.text).filter((text: string) => !/ foco/.test(text))
 const named = async (ui: any, name: string) => ui.find({ type: 'Text', text: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}$`) })
 // The padding between a name and its line counts, which depends on the width, as ' … '.
 const pad = (text: string) => text.replace(/(?<=\S) {2,}/g, ' … ')
@@ -203,5 +205,53 @@ test('a read-only shell command marks the files it names', async ($, on) => {
   await $.tool.call({ tool: 'Bash', tool_use_id: 't3', command: 'sed -n 1,40p src/main.ts | head' } as any)
   const ui = await mount($)
   expect((await rowTexts(ui)).map(pad)).toContain('  ● main.ts … +12 -3')
+  await ui.unmount()
+})
+
+const many = Array.from({ length: 20 }, (_, i) => file(`a${String(i).padStart(2, '0')}.ts`))
+const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => t.text)
+
+test('two active files too far apart for the pane turn focus on, and it lets go once they go quiet', async ($, on) => {
+  const { clock } = engine(on, true, many)
+  await start($)
+  await filetree($)
+  const ui = await mount($, 8)
+  await $.tool.call(edit('/work/src/lib/util.ts') as any)
+  expect((await rowTexts(ui)).length).toBeGreaterThan(8) // one file: the whole tree, followed
+  await $.tool.call(edit('/work/README.md') as any)
+  expect(await rowTexts(ui)).toEqual(['▾ src/lib', '  ● util.ts', '● README.md'])
+  expect(await texts(ui)).toEqual(expect.arrayContaining(['⋯ 1 pasta', '⋯ 21 arquivos']))
+  expect(await ui.find({ type: 'Text', text: /◉ foco/ })).toBeDefined()
+  // the agent goes quiet: 4 s active, then 3 s more
+  await clock.advance(4300)
+  expect(await rowTexts(ui)).toEqual(['▾ src/lib', '  ○ util.ts', '○ README.md'])
+  await clock.advance(3300)
+  expect((await rowTexts(ui)).length).toBeGreaterThan(8)
+  expect(await ui.find({ type: 'Text', text: /○ foco/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('f holds focus on or off, and pressed again goes back to auto', async ($, on) => {
+  engine(on, true, many)
+  await start($)
+  await filetree($)
+  const ui = await mount($, 8)
+  // auto and off: f holds it on
+  await $.tool.call(edit('/work/README.md') as any)
+  await ui.press({ key: 'focus' })
+  expect(await rowTexts(ui)).toEqual(['● README.md'])
+  expect(await ui.find({ type: 'Text', text: /◉ foco fixo/ })).toBeDefined()
+  // again: back to auto
+  await ui.press({ key: 'focus' })
+  expect((await rowTexts(ui)).length).toBeGreaterThan(8)
+  expect(await ui.find({ type: 'Text', text: /^○ foco$/ })).toBeDefined()
+  // auto and on: f holds it off, so two far files no longer cut the tree down
+  await $.tool.call(edit('/work/src/lib/util.ts') as any)
+  expect(await rowTexts(ui)).toEqual(['▾ src/lib', '  ● util.ts', '● README.md'])
+  await ui.press({ key: 'focus' })
+  expect(await ui.find({ type: 'Text', text: /○ foco desligado/ })).toBeDefined()
+  expect((await rowTexts(ui)).length).toBeGreaterThan(8)
+  await $.tool.call(edit('/work/a00.ts') as any)
+  expect((await rowTexts(ui)).length).toBeGreaterThan(8)
   await ui.unmount()
 })

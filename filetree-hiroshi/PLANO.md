@@ -100,7 +100,7 @@ Ponto a validar na fase 1: o original lê teclas e mouse por um `Client` (`Clien
 
 ## Modo foco: regra da projeção
 
-Entrada: árvore completa + conjunto `A` de arquivos ativos (os `live` e os tocados nos últimos 4 s).
+Entrada: árvore completa + os arquivos que o agente tocou no turno (os ativos, `●`, e os recentes, `○`) + o cursor. O conjunto `A` dos ativos (os `live` e os tocados nos últimos 4 s) decide quando o foco liga.
 
 1. Uma linha aparece se for **ancestral** de algum arquivo em `A`, se **estiver** em `A` ou se for o cursor.
 2. Em cada pasta exibida, irmãos ocultos consecutivos viram uma linha `⋯ N itens` (ou `⋯ N pastas` / `⋯ N arquivos` quando forem todos do mesmo tipo).
@@ -110,7 +110,7 @@ Entrada: árvore completa + conjunto `A` de arquivos ativos (os `live` e os toca
 Quando liga e desliga:
 - `auto` (padrão): liga quando há 2 ou mais arquivos ativos **e** eles não cabem juntos na janela atual. Desliga 3 s depois que `A` esvazia.
 - A pessoa rolou ou moveu o cursor durante o turno: `manual = true` e o auto não liga mais até o próximo prompt.
-- Tecla `f`: alterna entre `on` e `off` fixos; de novo volta para `auto`.
+- Tecla `f` (botão `f: foco` ao lado da branch): no `auto`, fixa o contrário do que aparece (`on` se o foco não está ativo, `off` se está); apertada de novo, volta para `auto`.
 
 Com um arquivo só ativo, sem foco: a janela segue o arquivo, como no original.
 

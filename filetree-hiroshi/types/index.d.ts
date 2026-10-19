@@ -49,6 +49,10 @@ export type Act = { tone: Tone; at: number; live: number }
 // A file the agent wrote this session, the most recent first.
 export type Change = { path: string; outside: boolean; at: number }
 
+// `auto` cuts the tree down by itself while the agent's files lie too far apart to show
+// together (`engaged`); `on` and `off` are the person's, from the f key, until they press it again.
+export type Focus = { mode: 'auto' | 'on' | 'off'; engaged: boolean }
+
 declare module 'claude-code' {
   interface PluginState {
     'filetree-hiroshi': {
@@ -58,6 +62,7 @@ declare module 'claude-code' {
       activity: Record<string, Act>
       pulse: number
       changes: Change[]
+      focus: Focus
     }
   }
 }

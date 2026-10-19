@@ -1,15 +1,17 @@
 // filetree-hiroshi: the session's folder as a tree in a side pane.
-//   Inspired by data-goblin/claude-code-filetree (MIT). Phases 1 to 3 of filetree-hiroshi/PLANO.md:
+//   Inspired by data-goblin/claude-code-filetree (MIT). Phases 1 to 4 of filetree-hiroshi/PLANO.md:
 //   the pane, the tree read on demand, folders opened and closed by a press, /filetree to
 //   open or close it, git's view of each row (color, lines added and removed, branch), and
 //   where the agent reads and writes: a pulsing ● while active, ○ for the rest of the turn,
 //   collapsed folders opened to show the file, the pane following it. The pane opens by
 //   itself on the agent's first write; a write outside the session's folder lists the file
-//   under the tree, never in it. The engine scrolls the pane: the hook draws every visible row.
+//   under the tree, never in it. When the agent's files lie too far apart to show together,
+//   focus mode cuts the tree down to the way to them (f turns it on or off for good).
+//   The engine scrolls the pane: the hook draws every visible row.
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Register, Timer } from 'claude-code'
 
-import type { Act, Change, GitCode, GitState, Panel, Tone } from '../types'
+import type { Act, Change, Focus, GitCode, GitState, Panel, Tone } from '../types'
 import {
   absolute,
   activeFolders,
@@ -24,6 +26,8 @@ import {
   shade,
   shownPath,
 } from './activity'
+import { moreLabel, project, RELEASE_MS, spreadOut } from './focus'
+import type { FocusRow } from './focus'
 import { codeAt, load, locate, noGit } from './git'
 import type { Run } from './git'
 import {
@@ -62,11 +66,14 @@ const git = atom({ plugin: 'filetree-hiroshi', key: 'git' } as const, noGit())
 const activity = atom({ plugin: 'filetree-hiroshi', key: 'activity' } as const, {} as Record<string, Act>)
 const pulse = atom({ plugin: 'filetree-hiroshi', key: 'pulse' } as const, 0)
 const changes = atom({ plugin: 'filetree-hiroshi', key: 'changes' } as const, [] as Change[])
+const focus = atom({ plugin: 'filetree-hiroshi', key: 'focus' } as const, { mode: 'auto', engaged: false } as Focus)
 
 // Read again at every session.start, which a reload raises too.
 let home = ''
 // Whether the terminal docks panes; unknown until a drawing says.
 let isFullscreen: boolean | undefined
+// The rows the pane has for the tree, as last drawn.
+let room = 20
 
 const runner =
   ($: EngineInterface): Run =>
@@ -139,10 +146,45 @@ function beat($: EngineInterface) {
       if (!anyActive(await read($, activity), now)) {
         ticker?.cancel()
         ticker = undefined
+        release($)
       }
       await update($, pulse, n => n + 1)
     })().catch(() => {})
   })
+}
+
+// The paths in the session's folder the agent touched this turn: the active ones, or all.
+async function touchedFiles($: EngineInterface, onlyActive: boolean): Promise<string[]> {
+  const t = await read($, tree)
+  const now = await $.clock.now()
+  return Object.entries(await read($, activity))
+    .filter(([path, act]) => inside(t.root, path) && path in t.nodes && (!onlyActive || markOf(act, now) === 'active'))
+    .map(([path]) => path)
+}
+
+// Auto focus engages once two active files lie too far apart to show together, unless the
+// person scrolled the pane this turn.
+async function engage($: EngineInterface) {
+  const f = await read($, focus)
+  if (f.mode !== 'auto' || f.engaged || (await read($, panel)).manual) return
+  const t = await read($, tree)
+  const active = (await touchedFiles($, true)).filter(path => t.nodes[path]?.kind !== 'dir')
+  if (spreadOut(t, active, room)) await update($, focus, cur => ({ ...cur, engaged: true }))
+}
+
+// ...and lets go a little after the agent's files go quiet.
+function release($: EngineInterface) {
+  $.clock.after(RELEASE_MS, () => {
+    void (async () => {
+      if (anyActive(await read($, activity), await $.clock.now())) return
+      await update($, focus, f => (f.engaged ? { ...f, engaged: false } : f))
+    })().catch(() => {})
+  })
+}
+
+// The f key: from auto it holds the opposite of what shows; pressed again, back to auto.
+async function toggleFocus($: EngineInterface, showing: boolean) {
+  await update($, focus, (f): Focus => (f.mode === 'auto' ? { ...f, mode: showing ? 'off' : 'on' } : { mode: 'auto', engaged: false }))
 }
 
 async function touch($: EngineInterface, paths: readonly string[], tone: Tone, live: -1 | 0 | 1) {
@@ -160,6 +202,7 @@ async function reveal($: EngineInterface, paths: readonly string[]) {
   const dirs = [...new Set(within.flatMap(path => ancestors(t.root, path)))]
   for (const dir of [t.root, ...dirs]) if (dir === t.root || needsListing(await read($, tree), dir)) await list($, dir)
   await update($, tree, cur => expand(cur, dirs))
+  await engage($)
   const p = await read($, panel)
   if (p.manual || !p.showTree) return
   if (!(await $.ui.panes()).some(pane => pane.id === PANE)) return
@@ -299,6 +342,7 @@ export const register: Register = on => {
     const now = await $.clock.now()
     await update($, activity, acts => Object.fromEntries(Object.entries(acts).filter(([, act]) => markOf(act, now) === 'active')))
     await update($, panel, p => (p.manual ? { ...p, manual: false } : p))
+    await update($, focus, f => (f.engaged ? { ...f, engaged: false } : f))
     schedule($)
     return next(e)
   })
@@ -349,10 +393,23 @@ export const register: Register = on => {
     const acts = await read($, activity)
     const beatNow = await read($, pulse)
     const written = await read($, changes)
+    const f = await read($, focus)
     const now = await $.clock.now()
     const width = Math.max(16, e.props.bodyColumns)
-    const rows = p.showTree ? visibleRows(t) : []
     const busyDirs = activeFolders(acts, now, t.root)
+    room = Math.max(5, e.props.scroll.bodyRows - 2 - (written.length ? written.length + 1 : 0))
+
+    // In focus the tree shows only the way to what the agent touched this turn (and the cursor).
+    const touched = Object.keys(acts).filter(path => inside(t.root, path) && path in t.nodes)
+    const wantsFocus = f.mode === 'on' || (f.mode === 'auto' && f.engaged)
+    const projected = p.showTree && wantsFocus ? project(t, [...touched, t.cursor]) : []
+    const showing = projected.length > 0
+    const rows: FocusRow[] = !p.showTree
+      ? []
+      : showing
+        ? projected
+        : visibleRows(t).map(({ node, depth }) => ({ kind: 'node', node, depth, label: node.name, isOpen: isExpanded(t, node.path) }))
+    const focusLabel = `${showing ? '◉' : '○'} foco${f.mode === 'on' ? ' fixo' : f.mode === 'off' ? ' desligado' : ''}`
 
     const total = tailOf(g.lines[t.root], undefined)
     const head = fitRow('', basename(t.root), total.map(part => part.text).join(' '), width)
@@ -367,16 +424,33 @@ export const register: Register = on => {
             {head.tail && total.map((part, i) => <Text key={`total-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
           </Text>
         )}
-        {p.showTree && g.top && (
-          <Text wrap="truncate-end" color={g.isDetached ? 'warning' : 'cyan'}>
-            {g.isDetached ? '◆' : '⎇'} {g.branch}
-            {g.ahead > 0 && <Text color="success"> ↑{g.ahead}</Text>}
-            {g.behind > 0 && <Text color="error"> ↓{g.behind}</Text>}
-          </Text>
+        {p.showTree && (
+          <Box flexDirection="row" justifyContent="space-between">
+            <Box flexShrink={1}>
+              <Text wrap="truncate-end" color={g.isDetached ? 'warning' : 'cyan'}>
+                {g.top ? `${g.isDetached ? '◆' : '⎇'} ${g.branch}` : ''}
+                {g.ahead > 0 && <Text color="success"> ↑{g.ahead}</Text>}
+                {g.behind > 0 && <Text color="error"> ↓{g.behind}</Text>}
+              </Text>
+            </Box>
+            <Button key="focus" plain hotkey="f" onPress={() => void toggleFocus($, showing)}>
+              <Text color={showing ? 'claude' : undefined} dimColor={!showing}>
+                {focusLabel}
+              </Text>
+            </Button>
+          </Box>
         )}
-        {rows.map(({ node, depth }) => {
+        {rows.map(row => {
+          if (row.kind === 'more')
+            return (
+              <Text key={row.key} dimColor wrap="truncate-end">
+                {INDENT.repeat(row.depth)}
+                {moreLabel(row.count, row.what)}
+              </Text>
+            )
+          const { node, depth, label } = row
           const isDir = node.kind === 'dir'
-          const open = isExpanded(t, node.path)
+          const open = row.isOpen
           const code = codeAt(g, node.path)
           const act = acts[node.path]
           const marked = markOf(act, now)
@@ -385,7 +459,7 @@ export const register: Register = on => {
           const glyph = isDir ? (open ? '▾' : '▸') : marked === 'active' ? '●' : marked === 'recent' ? '○' : ' '
           const lead = `${INDENT.repeat(depth)}${glyph} `
           const tail = tailOf(g.lines[node.path], code)
-          const row = fitRow(lead, node.name, tail.map(part => part.text).join(' '), width)
+          const fit = fitRow(lead, label, tail.map(part => part.text).join(' '), width)
           const gitColor: Color | undefined =
             code && code !== '!' ? CODE_COLOR[code] : isDir ? (g.changed[node.path] ? 'warning' : 'suggestion') : undefined
           const glow = act && marked === 'active' ? shade(act.tone, beatNow) : busy ? shade(busy, beatNow) : undefined
@@ -401,10 +475,10 @@ export const register: Register = on => {
                   dimColor={glow === undefined && (code === '!' || node.kind === 'link' || node.name.startsWith('.'))}
                   italic={node.kind === 'link'}
                 >
-                  {row.name}
+                  {fit.name}
                 </Text>
-                {row.pad}
-                {row.tail && tail.map((part, i) => <Text key={`${node.path}-tail-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
+                {fit.pad}
+                {fit.tail && tail.map((part, i) => <Text key={`${node.path}-tail-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
               </Text>
             </Button>
           )
