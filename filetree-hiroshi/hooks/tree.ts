@@ -119,7 +119,7 @@ export function fitRow(lead: string, name: string, tail: string, width: number):
 // The first row of a window of `rows` rows over `total` that shows row `at`, `margin`
 // rows from either edge when it can; `from` when it already does.
 export function windowFor(from: number, at: number, rows: number, total: number, margin: number): number {
-  const top = Math.max(0, Math.min(from, total - rows))
+  const top = Math.max(0, Math.min(Number.isFinite(from) ? from : 0, total - rows))
   if (at < 0) return top
   const m = Math.min(margin, Math.floor((rows - 1) / 2))
   if (at >= top + m && at <= top + rows - 1 - m) return top

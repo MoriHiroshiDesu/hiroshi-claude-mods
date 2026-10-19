@@ -129,11 +129,11 @@ Com um arquivo só ativo, sem foco: a janela segue o arquivo, como no original.
 
 Cada fase termina carregável, com testes passando (`claude plugin validate`, `tsc -p`, `claude plugin test`) e um commit.
 
-1. **Esqueleto**: manifesto, `/filetree`, painel abre com a raiz, expandir e recolher, cursor e rolagem. Resolver aqui a dúvida do Client e da rolagem.
-2. **Git**: status por cor, `+N -N` por arquivo e pasta, branch ↑↓ no cabeçalho, atualização por FileChanged.
-3. **Atividade e abertura**: tons de leitura e escrita via `tool.call`, revelar a pasta, shimmer nos `live`, `○` no fim; abertura automática na primeira escrita e o respeito ao `closedByUser`.
-4. **Modo foco**: projeção em `tree.ts`, regra do auto, tecla `f`, indicador `◉ foco` no cabeçalho.
-5. **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
+1. ✓ **Esqueleto**: manifesto, `/filetree`, painel abre com a raiz, expandir e recolher, cursor e rolagem. Resolver aqui a dúvida do Client e da rolagem.
+2. ✓ **Git**: status por cor, `+N -N` por arquivo e pasta, branch ↑↓ no cabeçalho, atualização por FileChanged.
+3. ✓ **Atividade e abertura**: tons de leitura e escrita via `tool.call`, revelar a pasta, shimmer nos `live`, `○` no fim; abertura automática na primeira escrita e o respeito ao `closedByUser`.
+4. ✓ **Modo foco**: projeção em `focus.ts`, regra do auto, tecla `f`, indicador `◉ foco` no cabeçalho.
+5. ✓ **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
 6. **Fechamento**: README do mod e da raiz, `marketplace.json`, atribuição ao original, teste manual num projeto grande.
 
 ## Testes

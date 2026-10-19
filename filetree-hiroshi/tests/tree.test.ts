@@ -70,4 +70,5 @@ test('the window moves only when the row it must show is out of it, keeping a ma
   expect(windowFor(95, -1, 10, 100, 2)).toBe(90) // nothing to show: clamped to the end
   expect(windowFor(0, 99, 10, 100, 2)).toBe(90) // never past the end
   expect(windowFor(3, 2, 10, 5, 2)).toBe(0) // all fits
+  expect(windowFor(undefined as unknown as number, -1, 10, 30, 2)).toBe(0) // an offset an older version never kept
 })

@@ -33,6 +33,21 @@ export function countLines(hunks: readonly Hunk[]): [number, number] {
   return [add, del]
 }
 
+// A change as an older version of the mod kept it (no hunks yet), brought to today's shape.
+export function normalizeChange(c: Partial<Change> & { path: string }): Change {
+  const hunks = Array.isArray(c.hunks) ? c.hunks : []
+  const [added, removed] = countLines(hunks)
+  return {
+    path: c.path,
+    outside: c.outside === true,
+    at: typeof c.at === 'number' ? c.at : 0,
+    hunks,
+    added: typeof c.added === 'number' ? c.added : added,
+    removed: typeof c.removed === 'number' ? c.removed : removed,
+    ...(typeof c.expanded === 'boolean' ? { expanded: c.expanded } : {}),
+  }
+}
+
 // The newest write first: a file written again moves to the top, its new hunks ahead of the old.
 export function recordChange(changes: readonly Change[], path: string, outside: boolean, now: number, hunks: readonly Hunk[] = []): Change[] {
   const was = changes.find(c => c.path === path)

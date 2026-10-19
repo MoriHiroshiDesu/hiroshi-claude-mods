@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { clipHunks, countLines, hunksOf, layout, recordChange } from '../hooks/diff'
+import { clipHunks, countLines, hunksOf, layout, normalizeChange, recordChange } from '../hooks/diff'
 import type { Hunk } from '../types'
 
 const hunk = (newStart: number, lines: string[]): Hunk => ({ oldStart: newStart, newStart, lines })
@@ -57,4 +57,10 @@ test('files that do not fit are counted, and a person-opened older file shows it
   const opened = changes.map(c => (c.path === '/w/a.ts' ? { ...c, expanded: true } : c.path === '/w/c.ts' ? { ...c, expanded: false } : c))
   const { blocks } = layout(opened, 10)
   expect(blocks.map(b => [b.change.path, b.isOpen, b.shown])).toEqual([['/w/c.ts', false, 0], ['/w/b.ts', false, 0], ['/w/a.ts', true, 1]])
+})
+
+test('a change kept by an older version of the mod is brought to today\'s shape', () => {
+  expect(normalizeChange({ path: '/w/a.ts', outside: false, at: 5 })).toEqual({ path: '/w/a.ts', outside: false, at: 5, hunks: [], added: 0, removed: 0 })
+  const old = normalizeChange({ path: '/w/b.ts' } as any)
+  expect(layout([old], 5).blocks.map(b => b.rows)).toEqual([1])
 })

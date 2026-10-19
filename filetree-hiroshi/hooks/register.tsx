@@ -15,7 +15,7 @@ import type { Color, EngineInterface, Register, Timer } from 'claude-code'
 
 import type { Act, Change, Focus, GitCode, GitState, Hunk, Panel, Tone, Tree } from '../types'
 import { absolute, activeFolders, anyActive, baseShade, gitChanges, mark, markOf, pathWords, SEARCH_LIMIT, shade, shownPath } from './activity'
-import { hunksOf, layout, recordChange } from './diff'
+import { hunksOf, layout, normalizeChange, recordChange } from './diff'
 import { moreLabel, project, RELEASE_MS, spreadOut } from './focus'
 import type { FocusRow } from './focus'
 import { codeAt, load, locate, noGit } from './git'
@@ -55,9 +55,8 @@ const CODE_TAIL: Partial<Record<GitCode, string>> = { '?': 'U', A: 'A', U: '!' }
 
 // Held by the host, so all of it survives a hot reload of this file.
 const tree = atom({ plugin: 'filetree-hiroshi', key: 'tree' } as const, emptyTree())
-const panel = atom({ plugin: 'filetree-hiroshi', key: 'panel' } as const, {
-  closedByUser: false, showTree: false, manual: false, offset: 0, diffsHidden: false,
-} as Panel)
+const PANEL: Panel = { closedByUser: false, showTree: false, manual: false, offset: 0, diffsHidden: false }
+const panel = atom({ plugin: 'filetree-hiroshi', key: 'panel' } as const, PANEL)
 const git = atom({ plugin: 'filetree-hiroshi', key: 'git' } as const, noGit())
 const activity = atom({ plugin: 'filetree-hiroshi', key: 'activity' } as const, {} as Record<string, Act>)
 const pulse = atom({ plugin: 'filetree-hiroshi', key: 'pulse' } as const, 0)
@@ -324,6 +323,10 @@ export const register: Register = on => {
     await $.command.register({ name: 'filetree', description: 'Abre ou fecha a árvore de arquivos da sessão' }).catch(() => {}) // a name Claude Code already has is refused: start anyway
     home = posix((await $.env.get('HOME').catch(() => undefined)) ?? '')
     const root = posix(e.cwd)
+    // The host keeps the state across a reload: what an older version of the mod wrote
+    // is brought to today's shape before anything draws it.
+    await update($, panel, p => ({ ...PANEL, ...p }))
+    await update($, changes, list => (Array.isArray(list) ? list.filter(c => typeof c?.path === 'string').map(normalizeChange) : []))
     // A hot reload starts the session again with the same folder: keep what was open.
     if ((await read($, tree)).root !== root) await update($, tree, () => emptyTree(root))
     await refresh($).catch(() => {})
@@ -439,165 +442,177 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Button, Code, Text } = $.ui.resolve(e)
-    if (e.viewport?.isFullscreen !== undefined) isFullscreen = e.viewport.isFullscreen
-    const t = await read($, tree)
-    const g: GitState = await read($, git)
-    const p = await read($, panel)
-    const acts = await read($, activity)
-    const beatNow = await read($, pulse)
-    const written = await read($, changes)
-    const f = await read($, focus)
-    const now = await $.clock.now()
-    const width = Math.max(16, e.props.bodyColumns)
-    const height = Math.max(6, e.props.scroll.bodyRows)
-    const busyDirs = activeFolders(acts, now, t.root)
+    // A drawing that throws leaves the pane blank: say why in it instead.
+    try {
+      return await (async () => {
+        const { Box, Button, Code, Text } = $.ui.resolve(e)
+        if (e.viewport?.isFullscreen !== undefined) isFullscreen = e.viewport.isFullscreen
+        const t = await read($, tree)
+        const g: GitState = await read($, git)
+        const p = await read($, panel)
+        const acts = await read($, activity)
+        const beatNow = await read($, pulse)
+        const written = await read($, changes)
+        const f = await read($, focus)
+        const now = await $.clock.now()
+        const width = Math.max(16, e.props.bodyColumns)
+        const height = Math.max(6, e.props.scroll.bodyRows)
+        const busyDirs = activeFolders(acts, now, t.root)
 
-    // The changes take up to their share of the rows (all of them with no tree), the tree the rest.
-    const header = p.showTree ? HEADER_ROWS : 0
-    const budget = p.showTree ? Math.max(4, Math.floor(height * SECTION_SHARE)) : height
-    let section = layout(written, budget - 1)
-    if (section.left > 0) section = layout(written, budget - 2)
-    const sectionRows =
-      written.length === 0 ? 0 : p.diffsHidden ? 1 : 1 + section.blocks.reduce((sum, b) => sum + b.rows, 0) + (section.left > 0 ? 1 : 0)
-    room = Math.max(1, height - header - sectionRows)
+        // The changes take up to their share of the rows (all of them with no tree), the tree the rest.
+        const header = p.showTree ? HEADER_ROWS : 0
+        const budget = p.showTree ? Math.max(4, Math.floor(height * SECTION_SHARE)) : height
+        let section = layout(written, budget - 1)
+        if (section.left > 0) section = layout(written, budget - 2)
+        const sectionRows =
+          written.length === 0 ? 0 : p.diffsHidden ? 1 : 1 + section.blocks.reduce((sum, b) => sum + b.rows, 0) + (section.left > 0 ? 1 : 0)
+        room = Math.max(1, height - header - sectionRows)
 
-    const { rows, showing } = p.showTree ? treeRows(t, acts, f) : { rows: [], showing: false }
-    // Following the agent, the window is checked at every drawing: the room changes as the changes grow.
-    const target = p.manual ? undefined : followed(t, acts)
-    const from = windowFor(p.offset, target ? rowOf(rows, t, target) : -1, room, rows.length, Math.floor(room / 3))
-    drawnFrom = from
-    const shown = rows.slice(from, from + room)
-    const focusLabel = `${showing ? '◉' : '○'} foco${f.mode === 'on' ? ' fixo' : f.mode === 'off' ? ' desligado' : ''}`
+        const { rows, showing } = p.showTree ? treeRows(t, acts, f) : { rows: [], showing: false }
+        // Following the agent, the window is checked at every drawing: the room changes as the changes grow.
+        const target = p.manual ? undefined : followed(t, acts)
+        const from = windowFor(p.offset, target ? rowOf(rows, t, target) : -1, room, rows.length, Math.floor(room / 3))
+        drawnFrom = from
+        const shown = rows.slice(from, from + room)
+        const focusLabel = `${showing ? '◉' : '○'} foco${f.mode === 'on' ? ' fixo' : f.mode === 'off' ? ' desligado' : ''}`
 
-    const total = tailOf(g.lines[t.root], undefined)
-    const head = fitRow('', basename(t.root), total.map(part => part.text).join(' '), width)
-    const ruleLabel = '─ Alterações '
-    const ruleKeys = p.diffsHidden ? 'c: limpar  d: mostrar' : 'c: limpar  d: ocultar'
+        const total = tailOf(g.lines[t.root], undefined)
+        const head = fitRow('', basename(t.root), total.map(part => part.text).join(' '), width)
+        const ruleLabel = '─ Alterações '
+        const ruleKeys = p.diffsHidden ? 'c: limpar  d: mostrar' : 'c: limpar  d: ocultar'
 
-    return (
-      <Box flexDirection="column">
-        {p.showTree && (
-          <Text wrap="truncate-end">
-            <Text bold>{head.name}</Text>
-            {head.pad}
-            {head.tail && total.map((part, i) => <Text key={`total-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
-          </Text>
-        )}
-        {p.showTree && (
-          <Box flexDirection="row" justifyContent="space-between">
-            <Box flexShrink={1}>
-              <Text wrap="truncate-end" color={g.isDetached ? 'warning' : 'cyan'}>
-                {g.top ? `${g.isDetached ? '◆' : '⎇'} ${g.branch}` : ''}
-                {g.ahead > 0 && <Text color="success"> ↑{g.ahead}</Text>}
-                {g.behind > 0 && <Text color="error"> ↓{g.behind}</Text>}
-              </Text>
-            </Box>
-            <Button key="focus" plain hotkey="f" onPress={() => void toggleFocus($, showing)}>
-              <Text color={showing ? 'claude' : undefined} dimColor={!showing}>
-                {focusLabel}
-              </Text>
-            </Button>
-          </Box>
-        )}
-        {shown.map(row => {
-          if (row.kind === 'more')
-            return (
-              <Text key={row.key} dimColor wrap="truncate-end">
-                {INDENT.repeat(row.depth)}
-                {moreLabel(row.count, row.what)}
-              </Text>
-            )
-          const { node, depth, label } = row
-          const isDir = node.kind === 'dir'
-          const open = row.isOpen
-          const code = codeAt(g, node.path)
-          const act = acts[node.path]
-          const marked = markOf(act, now)
-          // A collapsed folder with the agent inside pulses too.
-          const busy = isDir && !open ? busyDirs.get(node.path) : undefined
-          const glyph = isDir ? (open ? '▾' : '▸') : marked === 'active' ? '●' : marked === 'recent' ? '○' : ' '
-          const lead = `${INDENT.repeat(depth)}${glyph} `
-          const tail = tailOf(g.lines[node.path], code)
-          const fit = fitRow(lead, label, tail.map(part => part.text).join(' '), width)
-          const gitColor: Color | undefined =
-            code && code !== '!' ? CODE_COLOR[code] : isDir ? (g.changed[node.path] ? 'warning' : 'suggestion') : undefined
-          const glow = act && marked === 'active' ? shade(act.tone, beatNow) : busy ? shade(busy, beatNow) : undefined
-          const glyphColor = !isDir && act ? (marked === 'active' ? glow : baseShade(act.tone)) : undefined
-          return (
-            <Button key={node.path} plain onPress={() => void press($, node.path)}>
+        return (
+          <Box flexDirection="column">
+            {p.showTree && (
               <Text wrap="truncate-end">
-                {INDENT.repeat(depth)}
-                <Text color={glyphColor}>{glyph}</Text>{' '}
-                <Text
-                  bold={node.path === t.cursor || glow !== undefined}
-                  color={glow ?? gitColor}
-                  dimColor={glow === undefined && (code === '!' || node.kind === 'link' || node.name.startsWith('.'))}
-                  italic={node.kind === 'link'}
-                >
-                  {fit.name}
-                </Text>
-                {fit.pad}
-                {fit.tail && tail.map((part, i) => <Text key={`${node.path}-tail-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
+                <Text bold>{head.name}</Text>
+                {head.pad}
+                {head.tail && total.map((part, i) => <Text key={`total-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
               </Text>
-            </Button>
-          )
-        })}
-        {p.showTree && shown.length < room && written.length > 0 && <Box height={room - shown.length} />}
-        {written.length > 0 && (
-          <Box flexDirection="row" justifyContent="space-between">
-            <Box flexShrink={1}>
-              <Text dimColor wrap="truncate-end">
-                {ruleLabel}
-                {p.diffsHidden ? `(${written.length}) ` : ''}
-                {'─'.repeat(Math.max(1, width - ruleLabel.length - ruleKeys.length - 2))}
-              </Text>
-            </Box>
-            <Box>
-              <Button key="clear" plain hotkey="c" onPress={() => void update($, changes, () => [])}>
-                <Text dimColor>limpar</Text>
-              </Button>
-              <Text> </Text>
-              <Button key="diffs" plain hotkey="d" onPress={() => void update($, panel, cur => ({ ...cur, diffsHidden: !cur.diffsHidden }))}>
-                <Text dimColor>{p.diffsHidden ? 'mostrar' : 'ocultar'}</Text>
-              </Button>
-            </Box>
-          </Box>
-        )}
-        {!p.diffsHidden &&
-          section.blocks.map(({ change, isOpen, source, rest }) => {
-            const marked = change.outside ? undefined : markOf(acts[change.path], now)
-            const name = shownPath(change.path, t.root, home) + (change.outside ? ' ↗' : '')
-            const counts = tailOf(!change.outside && g.lines[change.path] ? g.lines[change.path] : [change.added, change.removed], undefined)
-            const glyph = change.hunks.length === 0 ? '·' : isOpen ? '▾' : '▸'
-            const fit = fitRow(`${glyph} `, name, counts.map(part => part.text).join(' '), width)
-            return (
-              <Box key={`change-${change.path}`} flexDirection="column">
-                <Button key={`change:${change.path}`} plain onPress={() => void toggleChange($, change.path, isOpen)}>
+            )}
+            {p.showTree && (
+              <Box flexDirection="row" justifyContent="space-between">
+                <Box flexShrink={1}>
+                  <Text wrap="truncate-end" color={g.isDetached ? 'warning' : 'cyan'}>
+                    {g.top ? `${g.isDetached ? '◆' : '⎇'} ${g.branch}` : ''}
+                    {g.ahead > 0 && <Text color="success"> ↑{g.ahead}</Text>}
+                    {g.behind > 0 && <Text color="error"> ↓{g.behind}</Text>}
+                  </Text>
+                </Box>
+                <Button key="focus" plain hotkey="f" onPress={() => void toggleFocus($, showing)}>
+                  <Text color={showing ? 'claude' : undefined} dimColor={!showing}>
+                    {focusLabel}
+                  </Text>
+                </Button>
+              </Box>
+            )}
+            {shown.map(row => {
+              if (row.kind === 'more')
+                return (
+                  <Text key={row.key} dimColor wrap="truncate-end">
+                    {INDENT.repeat(row.depth)}
+                    {moreLabel(row.count, row.what)}
+                  </Text>
+                )
+              const { node, depth, label } = row
+              const isDir = node.kind === 'dir'
+              const open = row.isOpen
+              const code = codeAt(g, node.path)
+              const act = acts[node.path]
+              const marked = markOf(act, now)
+              // A collapsed folder with the agent inside pulses too.
+              const busy = isDir && !open ? busyDirs.get(node.path) : undefined
+              const glyph = isDir ? (open ? '▾' : '▸') : marked === 'active' ? '●' : marked === 'recent' ? '○' : ' '
+              const lead = `${INDENT.repeat(depth)}${glyph} `
+              const tail = tailOf(g.lines[node.path], code)
+              const fit = fitRow(lead, label, tail.map(part => part.text).join(' '), width)
+              const gitColor: Color | undefined =
+                code && code !== '!' ? CODE_COLOR[code] : isDir ? (g.changed[node.path] ? 'warning' : 'suggestion') : undefined
+              const glow = act && marked === 'active' ? shade(act.tone, beatNow) : busy ? shade(busy, beatNow) : undefined
+              const glyphColor = !isDir && act ? (marked === 'active' ? glow : baseShade(act.tone)) : undefined
+              return (
+                <Button key={node.path} plain onPress={() => void press($, node.path)}>
                   <Text wrap="truncate-end">
-                    {glyph}{' '}
-                    <Text bold color={marked === 'active' ? shade('write', beatNow) : change.outside ? 'subtle' : undefined}>
+                    {INDENT.repeat(depth)}
+                    <Text color={glyphColor}>{glyph}</Text>{' '}
+                    <Text
+                      bold={node.path === t.cursor || glow !== undefined}
+                      color={glow ?? gitColor}
+                      dimColor={glow === undefined && (code === '!' || node.kind === 'link' || node.name.startsWith('.'))}
+                      italic={node.kind === 'link'}
+                    >
                       {fit.name}
                     </Text>
                     {fit.pad}
-                    {fit.tail && counts.map((part, i) => <Text key={`${change.path}-n-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
+                    {fit.tail && tail.map((part, i) => <Text key={`${node.path}-tail-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
                   </Text>
                 </Button>
-                {source && <Code format="diff" source={source} path={change.path} wrap="truncate-end" />}
-                {rest > 0 && (
+              )
+            })}
+            {p.showTree && shown.length < room && written.length > 0 && <Box height={room - shown.length} />}
+            {written.length > 0 && (
+              <Box flexDirection="row" justifyContent="space-between">
+                <Box flexShrink={1}>
                   <Text dimColor wrap="truncate-end">
-                    {'  '}⋯ +{rest} {rest === 1 ? 'linha' : 'linhas'}
+                    {ruleLabel}
+                    {p.diffsHidden ? `(${written.length}) ` : ''}
+                    {'─'.repeat(Math.max(1, width - ruleLabel.length - ruleKeys.length - 2))}
                   </Text>
-                )}
+                </Box>
+                <Box>
+                  <Button key="clear" plain hotkey="c" onPress={() => void update($, changes, () => [])}>
+                    <Text dimColor>limpar</Text>
+                  </Button>
+                  <Text> </Text>
+                  <Button key="diffs" plain hotkey="d" onPress={() => void update($, panel, cur => ({ ...cur, diffsHidden: !cur.diffsHidden }))}>
+                    <Text dimColor>{p.diffsHidden ? 'mostrar' : 'ocultar'}</Text>
+                  </Button>
+                </Box>
               </Box>
-            )
-          })}
-        {!p.diffsHidden && section.left > 0 && (
-          <Text dimColor wrap="truncate-end">
-            ⋯ mais {section.left} {section.left === 1 ? 'arquivo' : 'arquivos'}
-          </Text>
-        )}
-      </Box>
-    )
+            )}
+            {!p.diffsHidden &&
+              section.blocks.map(({ change, isOpen, source, rest }) => {
+                const marked = change.outside ? undefined : markOf(acts[change.path], now)
+                const name = shownPath(change.path, t.root, home) + (change.outside ? ' ↗' : '')
+                const counts = tailOf(!change.outside && g.lines[change.path] ? g.lines[change.path] : [change.added, change.removed], undefined)
+                const glyph = change.hunks.length === 0 ? '·' : isOpen ? '▾' : '▸'
+                const fit = fitRow(`${glyph} `, name, counts.map(part => part.text).join(' '), width)
+                return (
+                  <Box key={`change-${change.path}`} flexDirection="column">
+                    <Button key={`change:${change.path}`} plain onPress={() => void toggleChange($, change.path, isOpen)}>
+                      <Text wrap="truncate-end">
+                        {glyph}{' '}
+                        <Text bold color={marked === 'active' ? shade('write', beatNow) : change.outside ? 'subtle' : undefined}>
+                          {fit.name}
+                        </Text>
+                        {fit.pad}
+                        {fit.tail && counts.map((part, i) => <Text key={`${change.path}-n-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
+                      </Text>
+                    </Button>
+                    {source && <Code format="diff" source={source} path={change.path} wrap="truncate-end" />}
+                    {rest > 0 && (
+                      <Text dimColor wrap="truncate-end">
+                        {'  '}⋯ +{rest} {rest === 1 ? 'linha' : 'linhas'}
+                      </Text>
+                    )}
+                  </Box>
+                )
+              })}
+            {!p.diffsHidden && section.left > 0 && (
+              <Text dimColor wrap="truncate-end">
+                ⋯ mais {section.left} {section.left === 1 ? 'arquivo' : 'arquivos'}
+              </Text>
+            )}
+          </Box>
+        )
+      })()
+    } catch (err) {
+      const { Text } = $.ui.resolve(e)
+      return (
+        <Text color="error">
+          filetree-hiroshi: {err instanceof Error ? err.message : String(err)}
+        </Text>
+      )
+    }
   })
 }
