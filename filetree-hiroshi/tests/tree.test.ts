@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { FsEntry } from 'claude-code'
 
-import { dirname, emptyTree, inside, needsListing, sortEntries, toggle, visibleRows, withChildren } from '../hooks/tree'
+import { dirname, emptyTree, fitRow, inside, needsListing, sortEntries, toggle, visibleRows, withChildren } from '../hooks/tree'
 
 const file = (name: string): FsEntry => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })
 const dir = (name: string): FsEntry => ({ name, kind: 'dir', size: 0, mtimeMs: 0, isLink: false })
@@ -53,4 +53,12 @@ test('paths: parent folder and inside the root', () => {
   expect(inside('/w', '/w/src/a.ts')).toBe(true)
   expect(inside('/w', '/w')).toBe(true)
   expect(inside('/w', '/work/a.ts')).toBe(false)
+})
+
+test('a row fits its width: the name cut with an ellipsis, the tail kept flush right', () => {
+  expect(fitRow('  ▸ ', 'src', '+12 -3', 20)).toEqual({ name: 'src', pad: '       ', tail: '+12 -3' })
+  expect(fitRow('  ', 'a-very-long-file-name.ts', '+1', 20)).toEqual({ name: 'a-very-long-fi…', pad: ' ', tail: '+1' })
+  // too narrow for the tail: it goes, and the name takes what is left
+  expect(fitRow('          ', 'name.ts', '+100 -200', 16)).toEqual({ name: 'name.…', pad: '', tail: '' })
+  expect(fitRow('', 'short', '', 20)).toEqual({ name: 'short', pad: '', tail: '' })
 })

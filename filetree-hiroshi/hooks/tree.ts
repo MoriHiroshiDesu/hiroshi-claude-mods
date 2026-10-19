@@ -45,6 +45,12 @@ export function withChildren(tree: Tree, dir: string, entries: readonly FsEntry[
   if (!parent) return tree
   const sorted = sortEntries(entries)
   const children = sorted.map(entry => join(dir, entry.name))
+  // The same listing returns the same tree, so a refresh that found nothing new writes nothing.
+  const same =
+    parent.children !== undefined &&
+    parent.children.length === children.length &&
+    sorted.every((entry, i) => parent.children?.[i] === children[i] && nodes[children[i] as string]?.kind === kindOf(entry))
+  if (same) return tree
   const kept = new Set(children)
   for (const old of parent.children ?? []) if (!kept.has(old)) dropBelow(nodes, old)
   sorted.forEach((entry, i) => {
@@ -86,6 +92,16 @@ export const isExpanded = (tree: Tree, path: string) => tree.expanded.includes(p
 export function toggle(tree: Tree, path: string): Tree {
   const expanded = isExpanded(tree, path) ? tree.expanded.filter(p => p !== path) : [...tree.expanded, path]
   return { ...tree, expanded, cursor: path }
+}
+
+// A row is `lead` (indent and glyph), the name, padding, then `tail` flush right; past the
+// width the name is cut with an ellipsis, and below one character the tail is dropped.
+export function fitRow(lead: string, name: string, tail: string, width: number): { name: string; pad: string; tail: string } {
+  const room = width - lead.length - (tail ? tail.length + 1 : 0)
+  if (tail && room < 1) return fitRow(lead, name, '', width)
+  const shown = name.length <= room ? name : `${name.slice(0, Math.max(0, room - 1))}…`
+  const pad = tail ? ' '.repeat(Math.max(1, width - lead.length - shown.length - tail.length)) : ''
+  return { name: shown, pad, tail }
 }
 
 // A folder needs reading when it is open and was never listed.
