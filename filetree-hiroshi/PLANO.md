@@ -28,7 +28,7 @@ Solução: **modo foco**, em que a árvore mostra só o caminho até os arquivos
 ▸ README.md  +2 -1                        12s
 ```
 
-- `●` com shimmer: o agente está mexendo nele agora (laranja para escrita, roxo para leitura).
+- `●` com shimmer: o agente está mexendo nele agora (laranja para escrita, azul para leitura).
 - `○`: tocado neste turno, mas já não está ativo.
 - A seção de diffs ocupa até 40% da altura do painel. Só o arquivo mais recente fica expandido; os outros mostram uma linha de cabeçalho.
 

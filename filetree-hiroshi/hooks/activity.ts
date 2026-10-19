@@ -46,7 +46,8 @@ export function activeFolders(acts: Activity, now: number, root: string): Map<st
 // The tone's colors in turn, one step per pulse: a glow that brightens and fades.
 const SHADES: Record<Tone, string[]> = {
   write: ['#d97757', '#e4906f', '#efaa88', '#e4906f'],
-  read: ['#9d7cd8', '#b294e4', '#c7adf0', '#b294e4'],
+  // A strong blue: folders are drawn lavender, and green is git's color for a new file.
+  read: ['#2f80ff', '#4f95ff', '#70aaff', '#4f95ff'],
 }
 
 export const shade = (tone: Tone, pulse: number) => SHADES[tone][pulse % SHADES[tone].length] as string
