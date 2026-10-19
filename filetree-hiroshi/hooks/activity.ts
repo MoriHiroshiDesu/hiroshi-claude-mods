@@ -1,5 +1,5 @@
 // What the agent is doing where, as plain data: no `$`, so the tests drive it without the engine.
-import type { Act, Change, GitState, Tone } from '../types'
+import type { Act, GitState, Tone } from '../types'
 import { dirname, inside, join, posix } from './tree'
 
 // A path stays active (the pulsing ●) this long after the agent last touched it; then it
@@ -52,11 +52,6 @@ const SHADES: Record<Tone, string[]> = {
 
 export const shade = (tone: Tone, pulse: number) => SHADES[tone][pulse % SHADES[tone].length] as string
 export const baseShade = (tone: Tone) => SHADES[tone][0] as string
-
-// The newest write first; a file written again moves to the top.
-export function recordChange(changes: readonly Change[], path: string, outside: boolean, now: number): Change[] {
-  return [{ path, outside, at: now }, ...changes.filter(c => c.path !== path)]
-}
 
 // How a change is named: from the session's folder inside it, from ~ outside it.
 export function shownPath(path: string, root: string, home: string): string {

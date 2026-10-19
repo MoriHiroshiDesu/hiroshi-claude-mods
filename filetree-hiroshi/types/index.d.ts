@@ -38,6 +38,10 @@ export type Panel = {
   showTree: boolean
   // The person scrolled the pane this turn: it stops following the agent until the next prompt.
   manual: boolean
+  // The first row of the tree the pane shows: with the changes below it, the tree scrolls on its own.
+  offset: number
+  // The changes section folded to its rule line (the d key).
+  diffsHidden: boolean
 }
 
 export type Tone = 'read' | 'write'
@@ -46,8 +50,20 @@ export type Tone = 'read' | 'write'
 // many of its calls on it are still running.
 export type Act = { tone: Tone; at: number; live: number }
 
-// A file the agent wrote this session, the most recent first.
-export type Change = { path: string; outside: boolean; at: number }
+// One hunk of a unified diff: its lines start with ' ', '+' or '-'.
+export type Hunk = { oldStart: number; newStart: number; lines: string[] }
+
+// A file the agent wrote this session, the most recent first: its hunks newest first,
+// their lines added and removed, and whether the person opened or closed it in the section.
+export type Change = {
+  path: string
+  outside: boolean
+  at: number
+  hunks: Hunk[]
+  added: number
+  removed: number
+  expanded?: boolean
+}
 
 // `auto` cuts the tree down by itself while the agent's files lie too far apart to show
 // together (`engaged`); `on` and `off` are the person's, from the f key, until they press it again.

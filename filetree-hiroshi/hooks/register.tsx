@@ -1,31 +1,21 @@
-// filetree-hiroshi: the session's folder as a tree in a side pane.
-//   Inspired by data-goblin/claude-code-filetree (MIT). Phases 1 to 4 of filetree-hiroshi/PLANO.md:
+// filetree-hiroshi: the session's folder as a tree in a side pane, and the changes the agent made.
+//   Inspired by data-goblin/claude-code-filetree (MIT). Phases 1 to 5 of filetree-hiroshi/PLANO.md:
 //   the pane, the tree read on demand, folders opened and closed by a press, /filetree to
 //   open or close it, git's view of each row (color, lines added and removed, branch), and
 //   where the agent reads and writes: a pulsing ● while active, ○ for the rest of the turn,
-//   collapsed folders opened to show the file, the pane following it. The pane opens by
-//   itself on the agent's first write; a write outside the session's folder lists the file
-//   under the tree, never in it. When the agent's files lie too far apart to show together,
-//   focus mode cuts the tree down to the way to them (f turns it on or off for good).
-//   The engine scrolls the pane: the hook draws every visible row.
+//   collapsed folders opened to show the file, the tree following it. The pane opens by
+//   itself on the agent's first write; a write outside the session's folder is listed with
+//   the changes, never in the tree. When the agent's files lie too far apart to show
+//   together, focus mode cuts the tree down to the way to them (f turns it on or off for good).
+//   Below the tree, the changes section shows each written file's hunks, the newest open
+//   (d folds it, c clears it). The tree scrolls in a window of its own, so the section stays
+//   in view: the pane's body is drawn to fit, and the wheel and the focus ring move the window.
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Register, Timer } from 'claude-code'
 
-import type { Act, Change, Focus, GitCode, GitState, Panel, Tone } from '../types'
-import {
-  absolute,
-  activeFolders,
-  anyActive,
-  baseShade,
-  gitChanges,
-  mark,
-  markOf,
-  pathWords,
-  recordChange,
-  SEARCH_LIMIT,
-  shade,
-  shownPath,
-} from './activity'
+import type { Act, Change, Focus, GitCode, GitState, Hunk, Panel, Tone, Tree } from '../types'
+import { absolute, activeFolders, anyActive, baseShade, gitChanges, mark, markOf, pathWords, SEARCH_LIMIT, shade, shownPath } from './activity'
+import { hunksOf, layout, recordChange } from './diff'
 import { moreLabel, project, RELEASE_MS, spreadOut } from './focus'
 import type { FocusRow } from './focus'
 import { codeAt, load, locate, noGit } from './git'
@@ -42,6 +32,7 @@ import {
   posix,
   toggle,
   visibleRows,
+  windowFor,
   withChildren,
 } from './tree'
 
@@ -50,6 +41,9 @@ const TITLE = 'filetree'
 const INDENT = '  '
 const REFRESH_MS = 300 // a burst of writes, index changes and turn ends reads git once
 const PULSE_MS = 300
+const HEADER_ROWS = 2 // the folder's name and totals, then the branch and the focus toggle
+const SECTION_SHARE = 0.4 // of the pane's rows, at most, for the changes below the tree
+const WHEEL_STEP = 3
 const WRITES = new Set(['Edit', 'Write', 'NotebookEdit'])
 const SHELLS = new Set(['Bash', 'PowerShell'])
 const SEARCHES = new Set(['Grep', 'Glob']) // not on every build: compared by name
@@ -61,7 +55,9 @@ const CODE_TAIL: Partial<Record<GitCode, string>> = { '?': 'U', A: 'A', U: '!' }
 
 // Held by the host, so all of it survives a hot reload of this file.
 const tree = atom({ plugin: 'filetree-hiroshi', key: 'tree' } as const, emptyTree())
-const panel = atom({ plugin: 'filetree-hiroshi', key: 'panel' } as const, { closedByUser: false, showTree: false, manual: false } as Panel)
+const panel = atom({ plugin: 'filetree-hiroshi', key: 'panel' } as const, {
+  closedByUser: false, showTree: false, manual: false, offset: 0, diffsHidden: false,
+} as Panel)
 const git = atom({ plugin: 'filetree-hiroshi', key: 'git' } as const, noGit())
 const activity = atom({ plugin: 'filetree-hiroshi', key: 'activity' } as const, {} as Record<string, Act>)
 const pulse = atom({ plugin: 'filetree-hiroshi', key: 'pulse' } as const, 0)
@@ -72,8 +68,9 @@ const focus = atom({ plugin: 'filetree-hiroshi', key: 'focus' } as const, { mode
 let home = ''
 // Whether the terminal docks panes; unknown until a drawing says.
 let isFullscreen: boolean | undefined
-// The rows the pane has for the tree, as last drawn.
+// The rows the tree's window has, and the first one it showed, as last drawn.
 let room = 20
+let drawnFrom = 0
 
 const runner =
   ($: EngineInterface): Run =>
@@ -81,6 +78,42 @@ const runner =
     const { exitCode, stdout } = await $.process.run(argv, { timeoutMs: 5000 })
     return { exitCode, stdout }
   }
+
+// The rows the tree shows: in focus, only the way to what the agent touched this turn
+// (and the cursor); else every open folder's.
+function treeRows(t: Tree, acts: Record<string, Act>, f: Focus): { rows: FocusRow[]; showing: boolean } {
+  const touched = Object.keys(acts).filter(path => inside(t.root, path) && path in t.nodes)
+  const wantsFocus = f.mode === 'on' || (f.mode === 'auto' && f.engaged)
+  const projected = wantsFocus ? project(t, [...touched, t.cursor]) : []
+  if (projected.length) return { rows: projected, showing: true }
+  return {
+    rows: visibleRows(t).map(({ node, depth }) => ({ kind: 'node', node, depth, label: node.name, isOpen: isExpanded(t, node.path) })),
+    showing: false,
+  }
+}
+
+// Where a path shows among the rows: its own row, else the closed folder it lies in.
+function rowOf(rows: readonly FocusRow[], t: Tree, path: string): number {
+  for (const p of [path, ...ancestors(t.root, path).reverse()]) {
+    const i = rows.findIndex(row => row.kind === 'node' && row.node.path === p)
+    if (i >= 0) return i
+  }
+  return -1
+}
+
+// Moves the tree's window so row `at` shows, `margin` rows from either edge when it can.
+async function bringIntoView($: EngineInterface, at: number, total: number, margin: number) {
+  if (at < 0) return
+  const offset = windowFor(drawnFrom, at, room, total, margin)
+  await update($, panel, p => (offset === p.offset ? p : { ...p, offset }))
+}
+
+// The file the tree follows: the one the agent touched last.
+function followed(t: Tree, acts: Record<string, Act>): string | undefined {
+  let best: [string, number] | undefined
+  for (const [path, act] of Object.entries(acts)) if (inside(t.root, path) && path in t.nodes && (!best || act.at >= best[1])) best = [path, act.at]
+  return best?.[0]
+}
 
 // Reads a folder into the tree; one that cannot be read counts as empty, so it is not retried on every press.
 // The same listing writes nothing, so a refresh that found no change redraws nothing.
@@ -203,10 +236,10 @@ async function reveal($: EngineInterface, paths: readonly string[]) {
   for (const dir of [t.root, ...dirs]) if (dir === t.root || needsListing(await read($, tree), dir)) await list($, dir)
   await update($, tree, cur => expand(cur, dirs))
   await engage($)
-  const p = await read($, panel)
-  if (p.manual || !p.showTree) return
-  if (!(await $.ui.panes()).some(pane => pane.id === PANE)) return
-  await $.ui.scroll({ in: PANE, to: { key: within[within.length - 1] as string }, block: 'nearest' }).catch(() => {})
+  if ((await read($, panel)).manual) return
+  const cur = await read($, tree)
+  const { rows } = treeRows(cur, await read($, activity), await read($, focus))
+  await bringIntoView($, rowOf(rows, cur, within[within.length - 1] as string), rows.length, Math.floor(room / 3))
 }
 
 // The pane opens by itself on the agent's first write, unless the person closed it this
@@ -218,11 +251,11 @@ async function autoOpen($: EngineInterface, hasInside: boolean) {
   await $.ui.open({ id: PANE, title: TITLE })
 }
 
-async function wrote($: EngineInterface, paths: readonly string[]) {
+async function wrote($: EngineInterface, paths: readonly string[], hunks: readonly Hunk[] = []) {
   if (paths.length === 0) return
   const { root } = await read($, tree)
   const now = await $.clock.now()
-  await update($, changes, list => paths.reduce((acc, path) => recordChange(acc, path, !inside(root, path), now), list))
+  await update($, changes, list => paths.reduce((acc, path) => recordChange(acc, path, !inside(root, path), now, hunks), list))
   const within = paths.filter(path => inside(root, path))
   await touch($, within, 'write', 0)
   await autoOpen($, within.length > 0)
@@ -244,10 +277,12 @@ async function shellReads($: EngineInterface, command: string, cwd: string): Pro
   return found
 }
 
+// A press is the person's: the tree stops following the agent until the next prompt.
 async function press($: EngineInterface, path: string) {
   const t = await read($, tree)
   const node = t.nodes[path]
   if (!node) return
+  await update($, panel, p => (p.manual ? p : { ...p, manual: true, offset: drawnFrom }))
   if (node.kind !== 'dir') {
     await update($, tree, cur => ({ ...cur, cursor: path }))
     return
@@ -256,8 +291,12 @@ async function press($: EngineInterface, path: string) {
   await update($, tree, cur => toggle(cur, path))
 }
 
+async function toggleChange($: EngineInterface, path: string, isOpen: boolean) {
+  await update($, changes, list => list.map(c => (c.path === path ? { ...c, expanded: !isOpen } : c)))
+}
+
 // `+12 -3`, or a letter for a file git has no line counts for (untracked, added, conflict).
-function tailOf(lines: [number, number] | undefined, code: GitCode | undefined): { text: string; color: Color }[] {
+function tailOf(lines: readonly [number, number] | undefined, code: GitCode | undefined): { text: string; color: Color }[] {
   const parts: { text: string; color: Color }[] = []
   if (lines && lines[0] > 0) parts.push({ text: `+${lines[0]}`, color: 'success' })
   if (lines && lines[1] > 0) parts.push({ text: `-${lines[1]}`, color: 'error' })
@@ -321,7 +360,7 @@ export const register: Register = on => {
       await reveal($, files)
     } else if (WRITES.has(tool)) {
       const path = stringField(e, 'file_path') ?? stringField(e, 'notebook_path')
-      if (path) await wrote($, [absolute(path, cwd)])
+      if (path) await wrote($, [absolute(path, cwd)], hunksOf(result.result))
       schedule($)
     } else if (SHELLS.has(tool)) {
       if (result.isReadOnly) {
@@ -337,7 +376,7 @@ export const register: Register = on => {
   })
 
   // A new turn: the person may have edited files in another program, last turn's ○ go,
-  // and the pane follows the agent again.
+  // and the tree follows the agent again.
   on('prompt.submit', async ($, e, next) => {
     const now = await $.clock.now()
     await update($, activity, acts => Object.fromEntries(Object.entries(acts).filter(([, act]) => markOf(act, now) === 'active')))
@@ -352,13 +391,28 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // The person walking the rows with the focus ring: the window keeps a row of the tree
+  // past the ring in view, so the arrows go on through it.
   on('ui.focus', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
     schedule($)
-    return next(e)
+    const result = await next(e)
+    const t = await read($, tree)
+    if (e.origin.kind === 'person' && e.element && e.element in t.nodes) {
+      await update($, panel, p => (p.manual ? p : { ...p, manual: true }))
+      const { rows } = treeRows(t, await read($, activity), await read($, focus))
+      await bringIntoView($, rowOf(rows, t, e.element), rows.length, 1)
+    }
+    return result
   })
 
+  // The wheel over the tree moves its window; the pane's body itself is drawn to fit.
   on('ui.scroll', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
-    if (e.origin.kind === 'person') await update($, panel, p => (p.manual ? p : { ...p, manual: true }))
+    if (e.origin.kind !== 'person') return next(e)
+    const overTree = !e.pointer || (e.pointer.row >= HEADER_ROWS && e.pointer.row < HEADER_ROWS + room)
+    if (e.by !== 0 && overTree) {
+      const step = Math.sign(e.by) * Math.max(WHEEL_STEP, Math.abs(e.by))
+      await update($, panel, p => ({ ...p, manual: true, offset: Math.max(0, drawnFrom + step) }))
+    }
     return next(e)
   })
 
@@ -385,7 +439,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const { Box, Button, Code, Text } = $.ui.resolve(e)
     if (e.viewport?.isFullscreen !== undefined) isFullscreen = e.viewport.isFullscreen
     const t = await read($, tree)
     const g: GitState = await read($, git)
@@ -396,24 +450,30 @@ export const register: Register = on => {
     const f = await read($, focus)
     const now = await $.clock.now()
     const width = Math.max(16, e.props.bodyColumns)
+    const height = Math.max(6, e.props.scroll.bodyRows)
     const busyDirs = activeFolders(acts, now, t.root)
-    room = Math.max(5, e.props.scroll.bodyRows - 2 - (written.length ? written.length + 1 : 0))
 
-    // In focus the tree shows only the way to what the agent touched this turn (and the cursor).
-    const touched = Object.keys(acts).filter(path => inside(t.root, path) && path in t.nodes)
-    const wantsFocus = f.mode === 'on' || (f.mode === 'auto' && f.engaged)
-    const projected = p.showTree && wantsFocus ? project(t, [...touched, t.cursor]) : []
-    const showing = projected.length > 0
-    const rows: FocusRow[] = !p.showTree
-      ? []
-      : showing
-        ? projected
-        : visibleRows(t).map(({ node, depth }) => ({ kind: 'node', node, depth, label: node.name, isOpen: isExpanded(t, node.path) }))
+    // The changes take up to their share of the rows (all of them with no tree), the tree the rest.
+    const header = p.showTree ? HEADER_ROWS : 0
+    const budget = p.showTree ? Math.max(4, Math.floor(height * SECTION_SHARE)) : height
+    let section = layout(written, budget - 1)
+    if (section.left > 0) section = layout(written, budget - 2)
+    const sectionRows =
+      written.length === 0 ? 0 : p.diffsHidden ? 1 : 1 + section.blocks.reduce((sum, b) => sum + b.rows, 0) + (section.left > 0 ? 1 : 0)
+    room = Math.max(1, height - header - sectionRows)
+
+    const { rows, showing } = p.showTree ? treeRows(t, acts, f) : { rows: [], showing: false }
+    // Following the agent, the window is checked at every drawing: the room changes as the changes grow.
+    const target = p.manual ? undefined : followed(t, acts)
+    const from = windowFor(p.offset, target ? rowOf(rows, t, target) : -1, room, rows.length, Math.floor(room / 3))
+    drawnFrom = from
+    const shown = rows.slice(from, from + room)
     const focusLabel = `${showing ? '◉' : '○'} foco${f.mode === 'on' ? ' fixo' : f.mode === 'off' ? ' desligado' : ''}`
 
     const total = tailOf(g.lines[t.root], undefined)
     const head = fitRow('', basename(t.root), total.map(part => part.text).join(' '), width)
     const ruleLabel = '─ Alterações '
+    const ruleKeys = p.diffsHidden ? 'c: limpar  d: mostrar' : 'c: limpar  d: ocultar'
 
     return (
       <Box flexDirection="column">
@@ -440,7 +500,7 @@ export const register: Register = on => {
             </Button>
           </Box>
         )}
-        {rows.map(row => {
+        {shown.map(row => {
           if (row.kind === 'more')
             return (
               <Text key={row.key} dimColor wrap="truncate-end">
@@ -483,22 +543,60 @@ export const register: Register = on => {
             </Button>
           )
         })}
+        {p.showTree && shown.length < room && written.length > 0 && <Box height={room - shown.length} />}
         {written.length > 0 && (
+          <Box flexDirection="row" justifyContent="space-between">
+            <Box flexShrink={1}>
+              <Text dimColor wrap="truncate-end">
+                {ruleLabel}
+                {p.diffsHidden ? `(${written.length}) ` : ''}
+                {'─'.repeat(Math.max(1, width - ruleLabel.length - ruleKeys.length - 2))}
+              </Text>
+            </Box>
+            <Box>
+              <Button key="clear" plain hotkey="c" onPress={() => void update($, changes, () => [])}>
+                <Text dimColor>limpar</Text>
+              </Button>
+              <Text> </Text>
+              <Button key="diffs" plain hotkey="d" onPress={() => void update($, panel, cur => ({ ...cur, diffsHidden: !cur.diffsHidden }))}>
+                <Text dimColor>{p.diffsHidden ? 'mostrar' : 'ocultar'}</Text>
+              </Button>
+            </Box>
+          </Box>
+        )}
+        {!p.diffsHidden &&
+          section.blocks.map(({ change, isOpen, source, rest }) => {
+            const marked = change.outside ? undefined : markOf(acts[change.path], now)
+            const name = shownPath(change.path, t.root, home) + (change.outside ? ' ↗' : '')
+            const counts = tailOf(!change.outside && g.lines[change.path] ? g.lines[change.path] : [change.added, change.removed], undefined)
+            const glyph = change.hunks.length === 0 ? '·' : isOpen ? '▾' : '▸'
+            const fit = fitRow(`${glyph} `, name, counts.map(part => part.text).join(' '), width)
+            return (
+              <Box key={`change-${change.path}`} flexDirection="column">
+                <Button key={`change:${change.path}`} plain onPress={() => void toggleChange($, change.path, isOpen)}>
+                  <Text wrap="truncate-end">
+                    {glyph}{' '}
+                    <Text bold color={marked === 'active' ? shade('write', beatNow) : change.outside ? 'subtle' : undefined}>
+                      {fit.name}
+                    </Text>
+                    {fit.pad}
+                    {fit.tail && counts.map((part, i) => <Text key={`${change.path}-n-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
+                  </Text>
+                </Button>
+                {source && <Code format="diff" source={source} path={change.path} wrap="truncate-end" />}
+                {rest > 0 && (
+                  <Text dimColor wrap="truncate-end">
+                    {'  '}⋯ +{rest} {rest === 1 ? 'linha' : 'linhas'}
+                  </Text>
+                )}
+              </Box>
+            )
+          })}
+        {!p.diffsHidden && section.left > 0 && (
           <Text dimColor wrap="truncate-end">
-            {ruleLabel}
-            {'─'.repeat(Math.max(0, width - ruleLabel.length))}
+            ⋯ mais {section.left} {section.left === 1 ? 'arquivo' : 'arquivos'}
           </Text>
         )}
-        {written.map(change => {
-          const marked = change.outside ? 'recent' : markOf(acts[change.path], now)
-          const name = shownPath(change.path, t.root, home) + (change.outside ? ' ↗' : '')
-          return (
-            <Text key={`change-${change.path}`} wrap="truncate-end">
-              <Text color={marked === 'active' ? shade('write', beatNow) : baseShade('write')}>{marked === 'active' ? '●' : '○'}</Text>{' '}
-              <Text color={change.outside ? 'subtle' : undefined}>{fitRow('  ', name, '', width).name}</Text>
-            </Text>
-          )
-        })}
       </Box>
     )
   })

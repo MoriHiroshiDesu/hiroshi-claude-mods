@@ -116,6 +116,16 @@ export function fitRow(lead: string, name: string, tail: string, width: number):
   return { name: shown, pad, tail }
 }
 
+// The first row of a window of `rows` rows over `total` that shows row `at`, `margin`
+// rows from either edge when it can; `from` when it already does.
+export function windowFor(from: number, at: number, rows: number, total: number, margin: number): number {
+  const top = Math.max(0, Math.min(from, total - rows))
+  if (at < 0) return top
+  const m = Math.min(margin, Math.floor((rows - 1) / 2))
+  if (at >= top + m && at <= top + rows - 1 - m) return top
+  return Math.max(0, Math.min(at < top + m ? at - m : at - rows + 1 + m, total - rows))
+}
+
 // A folder needs reading when it is open and was never listed.
 export const needsListing = (tree: Tree, path: string) =>
   tree.nodes[path]?.kind === 'dir' && tree.nodes[path]?.children === undefined

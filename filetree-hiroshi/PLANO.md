@@ -122,6 +122,8 @@ Com um arquivo só ativo, sem foco: a janela segue o arquivo, como no original.
 - Arquivos fora do diretório da sessão aparecem com o caminho a partir de `~` e um `↗` no cabeçalho do bloco; o `+N -N` deles vem só do `structuredPatch`, já que podem não estar num repositório git.
 - Teclas: `d` mostra ou esconde a seção; `enter` num bloco expande ou recolhe; `c` limpa a lista.
 - Duração: acumula a sessão inteira; só o `c` limpa.
+- Implementação: os trechos são desenhados pelo elemento `Code` com `format: 'diff'` (números, cores e realce de sintaxe iguais aos diffs do Claude Code). A coluna de idade (`agora`, `12s`) ficou de fora, porque exigiria redesenhar o painel a cada segundo.
+- Rolagem: com a seção embaixo, a árvore rola numa janela própria (o corpo do painel é desenhado do tamanho exato, para a seção ficar sempre à vista). A janela segue o arquivo que o agente tocou por último; a roda do mouse sobre a árvore e o anel de foco do teclado a movem, e aí ela para de seguir até o próximo prompt.
 
 ## Fases
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { ACTIVE_MS, activeFolders, gitChanges, mark, markOf, pathWords, recordChange, shownPath } from '../hooks/activity'
+import { ACTIVE_MS, activeFolders, gitChanges, mark, markOf, pathWords, shownPath } from '../hooks/activity'
 import { noGit } from '../hooks/git'
 
 test('a path is active while a call runs or shortly after, then recent', () => {
@@ -26,13 +26,6 @@ test('folders above an active path carry its tone, a write winning', () => {
   const dirs = activeFolders(acts, 10, '/w')
   expect([...dirs.entries()].sort()).toEqual([['/w/src', 'write'], ['/w/src/lib', 'read']])
   expect(activeFolders(acts, ACTIVE_MS + 10, '/w').size).toBe(0)
-})
-
-test('a file written again moves to the top of the changes', () => {
-  let changes = recordChange([], '/w/a.ts', false, 1)
-  changes = recordChange(changes, '/w/b.ts', false, 2)
-  changes = recordChange(changes, '/w/a.ts', false, 3)
-  expect(changes.map(c => c.path)).toEqual(['/w/a.ts', '/w/b.ts'])
 })
 
 test('a change is named from the session folder, from ~, or in full', () => {

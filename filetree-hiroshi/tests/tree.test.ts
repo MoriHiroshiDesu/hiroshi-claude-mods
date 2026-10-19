@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { FsEntry } from 'claude-code'
 
-import { dirname, emptyTree, fitRow, inside, needsListing, sortEntries, toggle, visibleRows, withChildren } from '../hooks/tree'
+import { dirname, emptyTree, fitRow, inside, needsListing, sortEntries, toggle, visibleRows, windowFor, withChildren } from '../hooks/tree'
 
 const file = (name: string): FsEntry => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })
 const dir = (name: string): FsEntry => ({ name, kind: 'dir', size: 0, mtimeMs: 0, isLink: false })
@@ -61,4 +61,13 @@ test('a row fits its width: the name cut with an ellipsis, the tail kept flush r
   // too narrow for the tail: it goes, and the name takes what is left
   expect(fitRow('          ', 'name.ts', '+100 -200', 16)).toEqual({ name: 'name.…', pad: '', tail: '' })
   expect(fitRow('', 'short', '', 20)).toEqual({ name: 'short', pad: '', tail: '' })
+})
+
+test('the window moves only when the row it must show is out of it, keeping a margin', () => {
+  expect(windowFor(0, 5, 10, 100, 2)).toBe(0) // already in view
+  expect(windowFor(0, 9, 10, 100, 2)).toBe(2) // near the bottom edge: moved so 2 rows show below it
+  expect(windowFor(50, 10, 10, 100, 3)).toBe(7) // above: moved so 3 rows show above it
+  expect(windowFor(95, -1, 10, 100, 2)).toBe(90) // nothing to show: clamped to the end
+  expect(windowFor(0, 99, 10, 100, 2)).toBe(90) // never past the end
+  expect(windowFor(3, 2, 10, 5, 2)).toBe(0) // all fits
 })
