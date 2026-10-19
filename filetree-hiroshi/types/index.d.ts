@@ -36,10 +36,28 @@ export type Panel = {
   closedByUser: boolean
   // Whether the pane draws the tree (false while it only has writes outside the session's folder).
   showTree: boolean
+  // The person scrolled the pane this turn: it stops following the agent until the next prompt.
+  manual: boolean
 }
+
+export type Tone = 'read' | 'write'
+
+// What the agent did to a path this turn: the tone, when it last touched it, and how
+// many of its calls on it are still running.
+export type Act = { tone: Tone; at: number; live: number }
+
+// A file the agent wrote this session, the most recent first.
+export type Change = { path: string; outside: boolean; at: number }
 
 declare module 'claude-code' {
   interface PluginState {
-    'filetree-hiroshi': { tree: Tree; panel: Panel; git: GitState }
+    'filetree-hiroshi': {
+      tree: Tree
+      panel: Panel
+      git: GitState
+      activity: Record<string, Act>
+      pulse: number
+      changes: Change[]
+    }
   }
 }

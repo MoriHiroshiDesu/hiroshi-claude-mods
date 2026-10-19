@@ -89,6 +89,18 @@ export function visibleRows(tree: Tree): Row[] {
 
 export const isExpanded = (tree: Tree, path: string) => tree.expanded.includes(path)
 
+// The folders between the root and a path, top first, neither end included.
+export function ancestors(root: string, path: string): string[] {
+  const out: string[] = []
+  for (let dir = dirname(path); inside(root, dir) && dir !== root; dir = dirname(dir)) out.unshift(dir)
+  return out
+}
+
+export const expand = (tree: Tree, dirs: readonly string[]): Tree => ({
+  ...tree,
+  expanded: [...new Set([...tree.expanded, ...dirs.filter(dir => dir in tree.nodes)])],
+})
+
 export function toggle(tree: Tree, path: string): Tree {
   const expanded = isExpanded(tree, path) ? tree.expanded.filter(p => p !== path) : [...tree.expanded, path]
   return { ...tree, expanded, cursor: path }
