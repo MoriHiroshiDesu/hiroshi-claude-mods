@@ -51,6 +51,10 @@ function engine(on: any, repo = true, extra: FsEntry[] = []) {
   on('ui.open', (_$: any, e: any) => ((panes.open = true), opened.push(e.id), { value: { isPlaced: true } }))
   on('ui.panes', () => ({ value: panes.open ? [{ id: PANE, title: 'filetree', isShown: true, isFocused: false, isPlaced: true }] : [] }))
   on('ui.close', () => ((panes.open = false), { value: undefined }))
+  on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text> // the engine's own band
+  })
   // The tools themselves: each call answered as done.
   on('tool.call', (_$: any, e: any) =>
     e.tool === 'Bash' && /^sed -n/.test(e.command)
@@ -101,11 +105,57 @@ test('pressing a folder reads it once and opens and closes it', async ($, on) =>
 test('/filetree opens the pane and closes it again', async ($, on) => {
   const { panes } = engine(on)
   await start($)
-  expect(panes.open).toBe(false) // never opened at the start of a session
+  expect(panes.open).toBe(false) // nothing drew yet to say the terminal docks panes
   expect((await filetree($)).text).toBe('filetree aberto.')
   expect(panes.open).toBe(true)
   expect((await filetree($)).text).toBe('filetree fechado.')
   expect(panes.open).toBe(false)
+})
+
+// The band above the prompt, drawn as the session starts: it says whether the terminal docks panes.
+const band = ($: any, isFullscreen: boolean) =>
+  $.ui.mount({ plugin: PANE, surface: 'terminal', component: 'AbovePrompt', props: {}, viewport: { columns: 160, rows: 40, isFullscreen } } as any)
+
+test('a fullscreen session opens the pane at its start, with the tree', async ($, on) => {
+  const { clock, opened } = engine(on, false)
+  await start($)
+  const above = await band($, true)
+  await clock.advance(0)
+  expect(opened).toEqual([PANE])
+  const ui = await mount($)
+  expect(await rowTexts(ui)).toEqual(['▸ dist', '▸ src', '  notes.md', '  README.md'])
+  await ui.unmount()
+  await above.unmount()
+})
+
+test('on the main screen the pane waits for /filetree', async ($, on) => {
+  const { clock, opened } = engine(on, false)
+  await start($)
+  const above = await band($, false)
+  await clock.advance(0)
+  expect(opened).toEqual([])
+  await above.unmount()
+})
+
+test('a reload opens the pane again, unless the person closed it', async ($, on) => {
+  const { clock, opened, panes } = engine(on, false)
+  await start($)
+  const first = await band($, true)
+  await clock.advance(0)
+  expect(opened).toEqual([PANE])
+  await first.unmount()
+  panes.open = false // an unload closes it
+  await start($)
+  const second = await band($, true)
+  await clock.advance(0)
+  expect(opened).toEqual([PANE, PANE])
+  await second.unmount()
+  await filetree($) // the person closes it
+  await start($)
+  const third = await band($, true)
+  await clock.advance(0)
+  expect(opened).toEqual([PANE, PANE])
+  await third.unmount()
 })
 
 test('git colors each row and puts its lines on the right', async ($, on) => {

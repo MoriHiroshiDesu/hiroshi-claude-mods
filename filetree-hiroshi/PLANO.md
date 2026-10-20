@@ -45,11 +45,11 @@ Solução: **modo foco**, em que a árvore mostra só o caminho até os arquivos
 ## Abertura e escopo
 
 - **Raiz fixa:** a árvore é sempre a do diretório da sessão (o cwd em que a sessão começou). Um `cd` do agente não troca a raiz.
-- **Abre sozinho, na primeira escrita:** o painel não abre no início da sessão. Abre quando o agente escreve ou edita um arquivo pela primeira vez (Edit, Write, NotebookEdit ou mudança detectada depois de um Bash). Leituras não abrem o painel.
+- **Abre sozinho no início da sessão e nas escritas:** com o terminal em tela cheia, o painel abre com a árvore assim que a sessão começa (o primeiro desenho da faixa acima do prompt diz se o terminal acopla painéis). Um `/reload-plugins` fecha o painel, e o `session.start` que vem depois o abre de novo. Fora isso, abre quando o agente escreve ou edita um arquivo (Edit, Write, NotebookEdit ou mudança detectada depois de um Bash). Leituras não abrem o painel.
 - **Escrita dentro do diretório da sessão:** o painel mostra a árvore e a seção de diffs.
 - **Escrita fora do diretório da sessão:** o arquivo entra só na seção de diffs, com o caminho a partir de `~` (ex.: `~/.config/foo.toml`), e nunca na árvore. Se até ali só houve escritas fora, o painel abre só com a seção de diffs, ocupando a altura toda; a árvore aparece na primeira escrita dentro do diretório.
 - **Leituras fora do diretório:** ignoradas (não marcam nada).
-- **`/filetree`:** abre o painel completo a qualquer momento, com a árvore mesmo sem escritas; de novo fecha. Depois de fechado pela pessoa, o painel não reabre sozinho na mesma sessão.
+- **`/filetree`:** abre o painel completo a qualquer momento, com a árvore mesmo sem escritas; de novo fecha. Depois de fechado pela pessoa (`/filetree`, `×` ou tecla), o painel não reabre sozinho na mesma sessão.
 
 **Fica de fora (talvez depois)**: preview de arquivo, busca, rastrear operações git/gh no rodapé, tamanho de pastas, ícones Nerd Font, contexto do arquivo selecionado no prompt, `/filetree <path>`.
 
@@ -86,8 +86,9 @@ Manter `tree.ts`, `diff.ts` e o parser do `git.ts` sem `$` deixa a lógica test�
 
 | Evento | Uso |
 |---|---|
-| `session.start` | registra `/filetree`, guarda o diretório da sessão como raiz, lê a raiz (`$.fs.list`) e roda o git; **não** abre o painel |
-| `command.run` `filetree` | abre ou fecha o painel (`$.ui.open`); fechar marca `closedByUser` |
+| `session.start` | registra `/filetree`, guarda o diretório da sessão como raiz, lê a raiz (`$.fs.list`) e roda o git; pede a abertura do painel ao primeiro desenho em tela cheia |
+| `ui.render` `AbovePrompt` | não desenha nada: guarda se o terminal acopla painéis e, no início da sessão, abre o painel por um timer (um desenho não pode gravar estado) |
+| `command.run` `filetree` | abre ou fecha o painel (`$.ui.open`); fechar marca `closedByUser`, porque o `ui.close` do próprio mod chega com origem `plugin` |
 | `tool.call` Read, Grep, Glob | antes do `next`: marca `live` e `read`; depois: tira o `live`. Grep e Glob marcam no máximo N arquivos do resultado |
 | `tool.call` Edit, Write, NotebookEdit | antes: `live` e `write`, revela a pasta. Depois: lê o `structuredPatch` do resultado (Edit e Write já trazem os hunks prontos, sem rodar git) e o empurra em `changes`; agenda a atualização do git |
 | `tool.call` Bash | depois: se o comando não for só leitura, agenda a atualização do git; arquivos alterados aparecem em `changes` só com `+N -N` vindo do `git diff --numstat`, sem hunks no MVP |
@@ -142,10 +143,10 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 - `diff.test.ts`: `structuredPatch` → linhas numeradas; acúmulo de duas edições no mesmo arquivo; corte em 12 linhas.
 - `git.test.ts`: parser de `status --porcelain -z` e `numstat -z`, soma nas pastas, arquivos binários.
 - `render.test.tsx`: painel com e sem alterações, foco ligado, larguras pequenas (24 colunas); painel só com diffs (escrita fora do diretório).
-- `register.test.ts`: o painel não abre no início nem numa leitura; abre na primeira escrita; escrita fora do diretório abre sem árvore e não cria nó; depois de fechado pela pessoa, não reabre.
+- `register.test.ts`: o painel abre no início em tela cheia, não no main screen nem numa leitura; abre na primeira escrita; um reload o abre de novo; escrita fora do diretório abre sem árvore e não cria nó; depois de fechado pela pessoa, não reabre.
 
 ## Decisões tomadas
 
 1. A seção de diffs guarda as alterações da **sessão inteira**; a tecla `c` limpa.
 2. Arquivos ignorados pelo `.gitignore` **aparecem**, apagados (inclusive `node_modules`, que fica recolhido e só é lido ao expandir). Só a pasta `.git` fica escondida.
-3. O painel **abre sozinho na primeira escrita**. A árvore é só do diretório da sessão; escritas fora dele vão só para a seção de diffs (detalhes em "Abertura e escopo").
+3. O painel **abre sozinho no início da sessão** (em tela cheia) e na primeira escrita. A árvore é só do diretório da sessão; escritas fora dele vão só para a seção de diffs (detalhes em "Abertura e escopo").

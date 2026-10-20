@@ -4,9 +4,10 @@
 //   open or close it, git's view of each row (color, lines added and removed, branch), and
 //   where the agent reads and writes: a pulsing ● while active, ○ for the rest of the turn,
 //   collapsed folders opened to show the file, the tree following it. The pane opens by
-//   itself on the agent's first write; a write outside the session's folder is listed with
-//   the changes, never in the tree. When the agent's files lie too far apart to show
-//   together, focus mode cuts the tree down to the way to them (f turns it on or off for good).
+//   itself as a fullscreen session starts and on the agent's writes; a write outside the
+//   session's folder is listed with the changes, never in the tree. When the agent's files
+//   lie too far apart to show together, focus mode cuts the tree down to the way to them
+//   (f turns it on or off for good).
 //   Below the tree, the changes section shows each written file's hunks, the newest open
 //   (d folds it, c clears it). The tree scrolls in a window of its own, so the section stays
 //   in view: the pane's body is drawn to fit, and the wheel and the focus ring move the window.
@@ -67,6 +68,8 @@ const focus = atom({ plugin: 'filetree-hiroshi', key: 'focus' } as const, { mode
 let home = ''
 // Whether the terminal docks panes; unknown until a drawing says.
 let isFullscreen: boolean | undefined
+// Set at every session.start: the first drawing that says the terminal docks panes opens the pane.
+let opensAtStart = false
 // The rows the tree's window has, and the first one it showed, as last drawn.
 let room = 20
 let drawnFrom = 0
@@ -241,8 +244,9 @@ async function reveal($: EngineInterface, paths: readonly string[]) {
   await bringIntoView($, rowOf(rows, cur, within[within.length - 1] as string), rows.length, Math.floor(room / 3))
 }
 
-// The pane opens by itself on the agent's first write, unless the person closed it this
-// session or the terminal has no room beside the transcript for it.
+// The pane opens by itself as the session starts and on the agent's writes, unless the person
+// closed it this session or the terminal has no room beside the transcript for it. A reload
+// closes it, and its session.start opens it again.
 async function autoOpen($: EngineInterface, hasInside: boolean) {
   if (hasInside) await update($, panel, p => (p.showTree ? p : { ...p, showTree: true }))
   if ((await read($, panel)).closedByUser || isFullscreen === false) return
@@ -330,6 +334,7 @@ export const register: Register = on => {
     // A hot reload starts the session again with the same folder: keep what was open.
     if ((await read($, tree)).root !== root) await update($, tree, () => emptyTree(root))
     await refresh($).catch(() => {})
+    opensAtStart = true
     return r
   })
 
@@ -419,15 +424,23 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // Only looks: whether the terminal docks panes decides if the pane may open unasked.
+  // Draws nothing: whether the terminal docks panes decides if the pane may open unasked,
+  // and the first drawing to say so opens it at the session's start, off the drawing,
+  // which may not write.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.viewport?.isFullscreen !== undefined) isFullscreen = e.viewport.isFullscreen
+    if (opensAtStart && isFullscreen === true) {
+      opensAtStart = false
+      $.clock.after(0, () => void autoOpen($, true).catch(() => {}))
+    }
     return next(e)
   })
 
   on('command.run', { command: 'filetree' }, async ($, e) => {
     isFullscreen = e.presentation?.isFullscreen ?? isFullscreen
     if ((await $.ui.panes()).some(pane => pane.id === PANE)) {
+      // The close is the mod's own (origin plugin), but the person asked for it.
+      await update($, panel, p => ({ ...p, closedByUser: true }))
       await $.ui.close({ id: PANE })
       return { text: 'filetree fechado.' }
     }
