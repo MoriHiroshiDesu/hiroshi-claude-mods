@@ -128,17 +128,19 @@ Com um arquivo só ativo, sem foco: a janela segue o arquivo, como no original.
 
 ## Abrir no editor (fase 7, em andamento)
 
-Um ícone `⧉` na ponta direita da linha abre no editor o arquivo da árvore ou, num bloco de Alterações, o diff. Zed e VS Code primeiro. Projeto já aberto no editor: o arquivo vira uma aba na janela dele, que vem para a frente. Projeto fechado: o editor abre o projeto com o arquivo em foco. O clique na linha continua abrindo e fechando pastas e blocos.
+Um ícone `⧉` na ponta direita da linha abre no editor o arquivo da árvore ou, num bloco de Alterações, o diff (no Zed, o arquivo; ver "Diff" abaixo). Zed e VS Code primeiro. Projeto já aberto no editor: o arquivo vira uma aba na janela dele, que vem para a frente. Projeto fechado: o editor abre o projeto com o arquivo em foco. O clique na linha continua abrindo e fechando pastas e blocos.
 
 Descartados:
 - um preview com realce de sintaxe dentro do próprio painel. Funcionaria (o elemento `Code`), mas o painel é estreito, o `Code` não rola sozinho e o editor dá diff lado a lado, edição e LSP;
 - o ctrl+clique. O `Button` não informa as teclas modificadoras; o `Client` informa, mas no Warp o ctrl+clique chegou como clique comum (`ctrl: false`). Exigiria também um `Client` por linha tratando o clique comum.
 
-### Como abrir (testado em 2026-10-19, Zed 1.24.2 e VS Code 1.138.0, GNOME no Wayland)
+### Como abrir (testado em 2026-10-19 e 2026-10-20, Zed 1.24.2 e 1.24.4, VS Code 1.138.0 e 1.126.0, GNOME no Wayland)
 
 - **Zed:** `zed <pasta da sessão> <arquivo>:<linha>`. Reaproveita a janela cuja pasta contém a pasta passada, inclusive quando ela é uma subpasta do projeto aberto; se nenhuma contém, abre uma nova. A janela vem para a frente.
-- **VS Code:** só reaproveita a janela com **exatamente** a pasta passada; uma subpasta abre outra janela, e sem pasta o arquivo cai na última janela ativa, mesmo de outro projeto. Então o mod lê `~/.config/Code/User/globalStorage/storage.json` (`windowsState.openedWindows[].folder`), escolhe a pasta mais funda que contém o arquivo, senão a raiz do projeto, e chama sempre `code <pasta> -g <arquivo>:<linha>`.
-- **Diff:** os dois comparam dois arquivos, não uma revisão do git, e o "antes" vai para um arquivo temporário: `git show HEAD:<caminho>` para os arquivos do git; para os de fora, uma cópia feita no `tool.call` antes da primeira escrita do agente na sessão (o que dá também um "diff da sessão"). VS Code: `code <pasta> --diff <antes> <arquivo>` abre na janela certa. Zed: `zed --diff` sem a pasta abriu em outra janela.
+- **VS Code:** só reaproveita a janela com **exatamente** a pasta passada; uma subpasta abre outra janela, e sem pasta o arquivo cai na última janela ativa, mesmo de outro projeto. O mod chama sempre `code <raiz do projeto> -g <arquivo>:<linha>`, a raiz sendo a pasta da sessão. Quem abriu no VS Code só uma subpasta do projeto ganha uma janela nova: limitação no README. Descartado: ler as janelas abertas do `~/.config/Code/User/globalStorage/storage.json` (`windowsState.openedWindows`), que não tira a janela da lista quando ela fecha (só ao sair do VS Code). `code --status` dá a lista ao vivo, mas com o nome curto da pasta e em ~3 s.
+- **Diff:** os editores comparam dois arquivos, não uma revisão do git, e o "antes" vai para um arquivo temporário: `git show HEAD:<caminho>` para os arquivos do git; para os de fora, uma cópia feita no `tool.call` antes da primeira escrita do agente na sessão (o que dá também um "diff da sessão").
+  - VS Code: `code <raiz> --diff <antes> <arquivo>` abre o diff lado a lado como aba na janela do projeto.
+  - Zed: o `--diff` não reaproveita janela em nenhuma forma testada. `zed --diff <antes> <arquivo> <pasta>` abre uma janela nova da pasta, mesmo com ela aberta; sem a pasta, uma janela do diretório de onde o comando rodou (inclusive rodando de dentro da pasta do projeto); com `-e`, acrescenta esse diretório como projeto na primeira janela existente (o Zed 1.24 guarda vários projetos numa janela) e troca para ele. E o `--diff` tem de vir antes dos caminhos: depois do primeiro caminho, tudo é lido como caminho (`<pasta> --diff a b` abre um arquivo chamado `--diff`). Então no Zed o `⧉` de Alterações abre só o arquivo, `zed <raiz> <arquivo>:<linha da primeira alteração>`, que cai na janela certa e mostra na margem as alterações em relação ao HEAD. Arquivos fora do git ficam sem marca de alteração no Zed.
 - Os dois editores sobem num processo próprio e sobrevivem ao fim do comando.
 - Qual editor: opção `userConfig` (`auto`, `zed` ou `code`); no `auto`, `TERM_PROGRAM` e depois o que estiver instalado (o `$EDITOR` pode ser um editor de terminal).
 - Nesta máquina o `zed` do PATH é um wrapper (`~/.local/bin/zed-project`): num projeto com `.zed/theme` ou overrides de tema, ele abre o Zed com `--user-data-dir` próprio, numa instância separada, e a janela já aberta pode não ser reaproveitada. Fora disso ele só repassa ao binário. Fica como limitação conhecida, não como caso a tratar.
@@ -152,10 +154,8 @@ Descartados:
 
 ### Falta
 
-1. Conferir se `zed <pasta> --diff <antes> <arquivo>` abre na janela do projeto; se não, testar `zed -e` ou abrir o arquivo antes do diff.
-2. Confirmar se o `storage.json` do VS Code também se atualiza quando uma janela fecha (fechar uma de duas, não sair do VS Code).
-3. Implementar: módulo puro `editor.ts` (escolha do editor, argv, pasta do VS Code), snapshot do "antes", temporários e sua limpeza, o `⧉` e o desvio no `ui.focus`, a tecla `e`, testes, README.
-4. Testar o desvio do foco com o painel aberto durante um reload do mod (num teste do spike a navegação travou uma vez e não se repetiu).
+1. Implementar: módulo puro `editor.ts` (escolha do editor, argv), snapshot do "antes", temporários e sua limpeza, o `⧉` e o desvio no `ui.focus`, a tecla `e`, testes, README.
+2. Testar o desvio do foco com o painel aberto durante um reload do mod (num teste do spike a navegação travou uma vez e não se repetiu).
 
 ## Fases
 
@@ -167,7 +167,7 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 4. ✓ **Modo foco**: projeção em `focus.ts`, regra do auto, tecla `f`, indicador `◉ foco` no cabeçalho.
 5. ✓ **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
 6. ✓ **Fechamento**: README do mod e da raiz, `marketplace.json`, atribuição ao original, teste manual num projeto grande.
-7. ⋯ **Abrir no editor**: o ícone `⧉` (no hover) ou a tecla `e` abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor"). Testes dos editores e spike do ícone feitos; faltam dois testes de editor e a implementação.
+7. ⋯ **Abrir no editor**: o ícone `⧉` (no hover) ou a tecla `e` abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor"). Testes dos editores e spike do ícone feitos; falta a implementação.
 
 ## Testes
 
