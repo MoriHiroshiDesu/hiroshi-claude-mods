@@ -128,9 +128,11 @@ Com um arquivo só ativo, sem foco: a janela segue o arquivo, como no original.
 
 ## Abrir no editor (fase 7, em andamento)
 
-Um ctrl+clique num arquivo da árvore o abre no editor; num bloco de Alterações, abre o diff. Zed e VS Code primeiro. Projeto já aberto no editor: o arquivo vira uma aba na janela dele, que vem para a frente. Projeto fechado: o editor abre o projeto com o arquivo em foco. O clique comum continua abrindo e fechando pastas e blocos.
+Um ícone `⧉` na ponta direita da linha abre no editor o arquivo da árvore ou, num bloco de Alterações, o diff. Zed e VS Code primeiro. Projeto já aberto no editor: o arquivo vira uma aba na janela dele, que vem para a frente. Projeto fechado: o editor abre o projeto com o arquivo em foco. O clique na linha continua abrindo e fechando pastas e blocos.
 
-Descartado: um preview com realce de sintaxe dentro do próprio painel. Funcionaria (o elemento `Code`), mas o painel é estreito, o `Code` não rola sozinho e o editor dá diff lado a lado, edição e LSP.
+Descartados:
+- um preview com realce de sintaxe dentro do próprio painel. Funcionaria (o elemento `Code`), mas o painel é estreito, o `Code` não rola sozinho e o editor dá diff lado a lado, edição e LSP;
+- o ctrl+clique. O `Button` não informa as teclas modificadoras; o `Client` informa, mas no Warp o ctrl+clique chegou como clique comum (`ctrl: false`). Exigiria também um `Client` por linha tratando o clique comum.
 
 ### Como abrir (testado em 2026-10-19, Zed 1.24.2 e VS Code 1.138.0, GNOME no Wayland)
 
@@ -139,19 +141,21 @@ Descartado: um preview com realce de sintaxe dentro do próprio painel. Funciona
 - **Diff:** os dois comparam dois arquivos, não uma revisão do git, e o "antes" vai para um arquivo temporário: `git show HEAD:<caminho>` para os arquivos do git; para os de fora, uma cópia feita no `tool.call` antes da primeira escrita do agente na sessão (o que dá também um "diff da sessão"). VS Code: `code <pasta> --diff <antes> <arquivo>` abre na janela certa. Zed: `zed --diff` sem a pasta abriu em outra janela.
 - Os dois editores sobem num processo próprio e sobrevivem ao fim do comando.
 - Qual editor: opção `userConfig` (`auto`, `zed` ou `code`); no `auto`, `TERM_PROGRAM` e depois o que estiver instalado (o `$EDITOR` pode ser um editor de terminal).
+- Nesta máquina o `zed` do PATH é um wrapper (`~/.local/bin/zed-project`): num projeto com `.zed/theme` ou overrides de tema, ele abre o Zed com `--user-data-dir` próprio, numa instância separada, e a janela já aberta pode não ser reaproveitada. Fora disso ele só repassa ao binário. Fica como limitação conhecida, não como caso a tratar.
 
-### O gesto
+### O ícone (spike validado em 2026-10-20, Warp)
 
-- O `Button` não informa as teclas modificadoras ao `onPress`. Quem informa é o `Client`: o `onPointer` recebe `button` (`left`, `middle`, `right`), `ctrl`, `shift` e `alt`, e o mod ouve por `surface.post` → `ui.message`. Cada linha da árvore e de Alterações ganha um `Client`; como o `down` prende o ponteiro até o `up`, ele provavelmente trata o clique comum também, e o `Button` fica para o teclado.
-- No Warp, o ctrl+clique chegou ao `Client` como clique comum (`ctrl: false`). Alternativas, se nenhuma tecla modificadora chegar: botão direito ou do meio, duplo clique, ou uma tecla com o painel focado (vale ter de qualquer jeito). O mod de teste está em `spikes/ctrl-click-teste/` (`claude --plugin-dir filetree-hiroshi/spikes/ctrl-click-teste`, depois `/ctrl-click-teste`); sai antes do merge.
+- Só em arquivos (na árvore e nos blocos de Alterações), nunca em pastas. Aparece só com o ponteiro sobre a linha: um `Box` com `position="absolute"`, `right={0}`, `display="none"` e `hover={{ display: 'flex' }}` dentro do `Box` com `key` da linha, que é o escopo do hover. Ele cobre a contagem (`+N -N`) só enquanto o ponteiro está ali, e a linha não perde colunas.
+- O `⧉` é um `Button` `plain` de label só o glifo, com `key` próprio (`abrir:<caminho>`). O clique nele cai no `onPress` dele, não no da linha.
+- Fora do anel de foco: a API não tem prop para isso, e um `Button` escondido entra no anel do Tab e das setas. O hook `ui.focus` do painel desvia: quando o anel vai cair num `abrir:`, segue para o próximo elemento na mesma direção do movimento (comparando a posição de destino com a do elemento focado, na ordem do desenho); sem próximo, o anel fica onde está. A ordem dos `key` é guardada a cada desenho.
+- Teclado: tecla `e` com o painel focado abre o arquivo ou o diff da linha sob o anel (o mod já acompanha o anel em `ui.focus`). Numa pasta, nada.
 
 ### Falta
 
 1. Conferir se `zed <pasta> --diff <antes> <arquivo>` abre na janela do projeto; se não, testar `zed -e` ou abrir o arquivo antes do diff.
-2. No Warp, testar shift, alt, botão direito e do meio com o mod de teste, e decidir o gesto.
-3. Confirmar se o `storage.json` do VS Code também se atualiza quando uma janela fecha.
-4. Spike do `Client` por linha convivendo com o `Button` (clique comum, ctrl+clique, teclado).
-5. Implementar: módulo puro `editor.ts` (escolha do editor, argv, pasta do VS Code), snapshot do "antes", temporários e sua limpeza, testes, README.
+2. Confirmar se o `storage.json` do VS Code também se atualiza quando uma janela fecha (fechar uma de duas, não sair do VS Code).
+3. Implementar: módulo puro `editor.ts` (escolha do editor, argv, pasta do VS Code), snapshot do "antes", temporários e sua limpeza, o `⧉` e o desvio no `ui.focus`, a tecla `e`, testes, README.
+4. Testar o desvio do foco com o painel aberto durante um reload do mod (num teste do spike a navegação travou uma vez e não se repetiu).
 
 ## Fases
 
@@ -163,7 +167,7 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 4. ✓ **Modo foco**: projeção em `focus.ts`, regra do auto, tecla `f`, indicador `◉ foco` no cabeçalho.
 5. ✓ **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
 6. ✓ **Fechamento**: README do mod e da raiz, `marketplace.json`, atribuição ao original, teste manual num projeto grande.
-7. ⋯ **Abrir no editor**: ctrl+clique abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor"). Testes dos editores feitos; falta decidir o gesto e implementar.
+7. ⋯ **Abrir no editor**: o ícone `⧉` (no hover) ou a tecla `e` abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor"). Testes dos editores e spike do ícone feitos; faltam dois testes de editor e a implementação.
 
 ## Testes
 
