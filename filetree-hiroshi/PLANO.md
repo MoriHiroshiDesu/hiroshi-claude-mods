@@ -87,7 +87,7 @@ Manter `tree.ts`, `diff.ts` e o parser do `git.ts` sem `$` deixa a lógica test�
 | Evento | Uso |
 |---|---|
 | `session.start` | registra `/filetree`, guarda o diretório da sessão como raiz, lê a raiz (`$.fs.list`) e roda o git; **não** abre o painel |
-| `command.run` `filetree` | abre ou fecha o painel (`$.ui.open`); fechar marca `closedByUser` |
+| `command.run` `filetree` | abre ou fecha o painel (`$.ui.open`); fechar marca `closedByUser`, porque o `ui.close` do próprio mod chega com origem `plugin` |
 | `tool.call` Read, Grep, Glob | antes do `next`: marca `live` e `read`; depois: tira o `live`. Grep e Glob marcam no máximo N arquivos do resultado |
 | `tool.call` Edit, Write, NotebookEdit | antes: `live` e `write`, revela a pasta. Depois: lê o `structuredPatch` do resultado (Edit e Write já trazem os hunks prontos, sem rodar git) e o empurra em `changes`; agenda a atualização do git |
 | `tool.call` Bash | depois: se o comando não for só leitura, agenda a atualização do git; arquivos alterados aparecem em `changes` só com `+N -N` vindo do `git diff --numstat`, sem hunks no MVP |

@@ -428,6 +428,8 @@ export const register: Register = on => {
   on('command.run', { command: 'filetree' }, async ($, e) => {
     isFullscreen = e.presentation?.isFullscreen ?? isFullscreen
     if ((await $.ui.panes()).some(pane => pane.id === PANE)) {
+      // The close is the mod's own (origin plugin), but the person asked for it.
+      await update($, panel, p => ({ ...p, closedByUser: true }))
       await $.ui.close({ id: PANE })
       return { text: 'filetree fechado.' }
     }
