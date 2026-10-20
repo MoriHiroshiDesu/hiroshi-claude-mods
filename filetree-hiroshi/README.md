@@ -14,7 +14,9 @@ Inspirado no [claude-code-filetree](https://github.com/data-goblin/claude-code-f
 
 ## Quando abre
 
-Sozinho, na primeira escrita do agente, se o terminal estiver em tela cheia (`/tui fullscreen`) e largo o bastante para o painel caber ao lado da conversa. Escritas fora do diretório da sessão aparecem só em Alterações, com o caminho a partir de `~`. `/filetree` abre ou fecha a qualquer momento; depois que você fecha o painel, ele não reabre sozinho na mesma sessão.
+Sozinho, no início da sessão e na primeira escrita do agente, se o terminal estiver em tela cheia (`/tui fullscreen`) e largo o bastante para o painel caber ao lado da conversa: 144 colunas, ou 110 depois que você abriu o painel com `/filetree` uma vez. Um `/reload-plugins` fecha o painel e o abre de novo. Escritas fora do diretório da sessão aparecem só em Alterações, com o caminho a partir de `~`. `/filetree` abre ou fecha a qualquer momento; depois que você fecha o painel, ele não reabre sozinho na mesma sessão.
+
+O painel de diff do próprio Claude Code (`/diff`) também abre sozinho quando o agente edita, e os dois viram abas no mesmo espaço: o que abriu por último fica na frente. Como o filetree já mostra os diffs, feche o de diff no `×`; ele fica fechado, nesta e nas próximas sessões, até você rodar `/diff` de novo.
 
 ## Teclas (com o painel focado)
 
