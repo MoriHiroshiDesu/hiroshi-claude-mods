@@ -11,6 +11,7 @@ Inspirado no [claude-code-filetree](https://github.com/data-goblin/claude-code-f
 - **Onde o agente está:** `●` pulsando em azul quando lê e em laranja quando escreve, `○` até o próximo prompt. A pasta do arquivo se abre e a árvore rola até ele.
 - **Modo foco:** quando os arquivos ativos estão longe demais na árvore para caberem juntos, ela mostra só o caminho até eles e resume o resto em `⋯ N arquivos`. `f` fixa o foco ligado ou desligado; de novo, volta ao automático.
 - **Alterações:** abaixo da árvore, cada arquivo escrito na sessão com `+N -N` e os trechos alterados. O mais recente fica aberto; clique abre e fecha os outros. `d` recolhe a seção e `c` a limpa.
+- **Abrir no editor:** com o mouse sobre a linha de um arquivo aparece um `⧉` na ponta direita. Clicar nele abre o arquivo no Zed ou no VS Code; numa alteração, abre o diff. Se o projeto já está aberto no editor, o arquivo vira uma aba na janela dele; se não, o editor abre o projeto com o arquivo em foco. `e` faz o mesmo com a linha focada.
 
 ## Quando abre
 
@@ -27,11 +28,23 @@ O painel de diff do próprio Claude Code (`/diff`) também abre sozinho quando o
 | `f` | foco: fixa ligado ou desligado, e de novo volta ao automático |
 | `d` | recolhe ou mostra as alterações |
 | `c` | limpa as alterações |
+| `e` ou clique no `⧉` | abre o arquivo no editor; numa alteração, o diff |
+
+O `⧉` só aparece com o mouse sobre a linha e fica fora do Tab e das setas.
+
+## Editor
+
+A opção `editor` do plugin (em `/config`) escolhe onde abrir: `auto` (padrão), `zed` ou `code`. No `auto`, vale o editor em cujo terminal a sessão roda (o terminal integrado do VS Code ou do Zed); fora deles, o primeiro instalado, nessa ordem. O `$EDITOR` não entra na conta.
+
+O diff compara o arquivo com a versão do último commit; um arquivo fora do git é comparado com uma cópia feita antes da primeira escrita do agente na sessão. Essas versões ficam numa pasta temporária (`/tmp/filetree-hiroshi-*`), apagada no fim da sessão.
 
 ## Limitações
 
 - Escritas feitas por comandos de shell (`sed -i`, `>>`) são descobertas comparando o git antes e depois: aparecem com `+N -N`, sem os trechos. Um arquivo novo, que o git ainda não acompanha, alterado de novo por shell passa despercebido.
 - Leituras por shell são reconhecidas só quando o comando é de leitura e cita o arquivo (`cat`, `sed -n`, `head`), até 5 arquivos por comando.
+- No Zed, o `⧉` de uma alteração abre o arquivo na linha do trecho mais recente, não o diff lado a lado: o `--diff` do Zed (1.24) sempre abre outra janela. O Zed marca na margem as linhas alteradas contra o último commit; um arquivo fora do git fica sem essas marcas.
+- No Zed, o mod lê o banco do próprio Zed (com `python3`) para saber se o projeto já tem uma janela só dele; se não tem, abre uma janela nova em vez de deixar o Zed pôr o projeto na janela de outro. Se a leitura falhar, o Zed decide a janela, e pode acrescentar o projeto à janela ativa.
+- O VS Code só reaproveita a janela aberta exatamente na pasta da sessão. Se você abriu nele só uma subpasta do projeto, o arquivo abre numa janela nova.
 - `git add`, commits e checkouts feitos em outro terminal atualizam o painel na hora a partir da sessão seguinte à instalação; até lá, ele se atualiza a cada prompt.
 
 ## Desenvolvimento
