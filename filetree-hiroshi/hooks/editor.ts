@@ -6,7 +6,7 @@ import { basename } from './tree'
 export type Editor = 'zed' | 'code'
 
 export const EDITORS: readonly Editor[] = ['zed', 'code']
-export const ICON = '⧉'
+export const OPENER = ' ⧉ abrir '
 
 // The keys of the Buttons the focus ring passes over: a row's ⧉ in the tree and in the
 // changes section, and the e key's own Button.

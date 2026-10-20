@@ -11,7 +11,7 @@
 //   Below the tree, the changes section shows each written file's hunks, the newest open
 //   (d folds it, c clears it). The tree scrolls in a window of its own, so the section stays
 //   in view: the pane's body is drawn to fit, and the wheel and the focus ring move the window.
-//   A ⧉ at the right of a file's row, shown under the pointer, opens it in Zed or VS Code; on
+//   A ⧉ abrir chip after a file's name, shown under the pointer, opens it in Zed or VS Code; on
 //   a change, its diff (in Zed, the file: see editor.ts). The e key opens the focused row's.
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Register, Timer } from 'claude-code'
@@ -26,7 +26,7 @@ import {
   diffKey,
   EDITORS,
   hasOwnWindow,
-  ICON,
+  OPENER,
   installedFrom,
   isIcon,
   isTempDir,
@@ -642,13 +642,20 @@ export const register: Register = (on, options) => {
           ...(written.length > 0 ? ['clear', 'diffs'] : []),
           ...(p.diffsHidden ? [] : section.blocks.flatMap(({ change }) => [`change:${change.path}`, diffKey(change.path)])),
         ]
-        // A ⧉ shown under the pointer at the right of a row, over its line counts.
-        const opener = (key: string, tail: string, onPress: () => void) => (
-          <Box position="absolute" right={0} display="none" hover={{ display: 'flex' }}>
-            <Text>{' '.repeat(tail ? tail.length + 1 : 1)}</Text>
-            <Button key={key} plain label={ICON} onPress={onPress} />
-          </Box>
-        )
+        // A chip shown under the pointer right after a row's name, or over its line counts when the
+        // name leaves no room before them.
+        const opener = (key: string, lead: string, fit: { name: string; tail: string }, onPress: () => void) => {
+          const at = lead.length + fit.name.length + 1
+          const fits = at + OPENER.length <= width - (fit.tail ? fit.tail.length + 1 : 0)
+          return (
+            <Box position="absolute" {...(fits ? { left: at } : { right: 0 })} display="none" hover={{ display: 'flex' }}>
+              {!fits && <Text>{' '.repeat(fit.tail ? fit.tail.length + 1 : 1)}</Text>}
+              <Button key={key} plain onPress={onPress}>
+                <Text backgroundColor="suggestion" color="inverseText">{OPENER}</Text>
+              </Button>
+            </Box>
+          )
+        }
 
         return (
           <Box flexDirection="column">
@@ -727,7 +734,7 @@ export const register: Register = (on, options) => {
               return (
                 <Box key={`row:${node.path}`} flexDirection="row" width={width}>
                   {line}
-                  {opener(openKey(node.path), fit.tail, () => opening($, openFile($, node.path)))}
+                  {opener(openKey(node.path), lead, fit, () => opening($, openFile($, node.path)))}
                 </Box>
               )
             })}
@@ -772,7 +779,7 @@ export const register: Register = (on, options) => {
                           {fit.tail && counts.map((part, i) => <Text key={`${change.path}-n-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
                         </Text>
                       </Button>
-                      {opener(diffKey(change.path), fit.tail, () => opening($, openChange($, change.path)))}
+                      {opener(diffKey(change.path), `${glyph} `, fit, () => opening($, openChange($, change.path)))}
                     </Box>
                     {source && <Code format="diff" source={source} path={change.path} wrap="truncate-end" />}
                     {rest > 0 && (

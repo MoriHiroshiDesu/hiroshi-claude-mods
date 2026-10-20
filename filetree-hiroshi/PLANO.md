@@ -128,7 +128,7 @@ Com um arquivo só ativo, sem foco: a janela segue o arquivo, como no original.
 
 ## Abrir no editor (fase 7, em andamento)
 
-Um ícone `⧉` na ponta direita da linha abre no editor o arquivo da árvore ou, num bloco de Alterações, o diff (no Zed, o arquivo; ver "Diff" abaixo). Zed e VS Code primeiro. Projeto já aberto no editor: o arquivo vira uma aba na janela dele, que vem para a frente. Projeto fechado: o editor abre o projeto com o arquivo em foco. O clique na linha continua abrindo e fechando pastas e blocos.
+Um botão `⧉ abrir`, com fundo colorido, logo depois do nome do arquivo (na ponta direita, sobre a contagem, quando o nome não deixa espaço) abre no editor o arquivo da árvore ou, num bloco de Alterações, o diff (no Zed, o arquivo; ver "Diff" abaixo). Zed e VS Code primeiro. Projeto já aberto no editor: o arquivo vira uma aba na janela dele, que vem para a frente. Projeto fechado: o editor abre o projeto com o arquivo em foco. O clique na linha continua abrindo e fechando pastas e blocos.
 
 Descartados:
 - um preview com realce de sintaxe dentro do próprio painel. Funcionaria (o elemento `Code`), mas o painel é estreito, o `Code` não rola sozinho e o editor dá diff lado a lado, edição e LSP;
@@ -147,15 +147,14 @@ Descartados:
 
 ### O ícone (spike validado em 2026-10-20, Warp)
 
-- Só em arquivos (na árvore e nos blocos de Alterações), nunca em pastas. Aparece só com o ponteiro sobre a linha: um `Box` com `position="absolute"`, `right={0}`, `display="none"` e `hover={{ display: 'flex' }}` dentro do `Box` com `key` da linha, que é o escopo do hover. Ele cobre a contagem (`+N -N`) só enquanto o ponteiro está ali, e a linha não perde colunas.
-- O `⧉` é um `Button` `plain` de label só o glifo, com `key` próprio (`abrir:<caminho>`). O clique nele cai no `onPress` dele, não no da linha.
+- Só em arquivos (na árvore e nos blocos de Alterações), nunca em pastas. Aparece só com o ponteiro sobre a linha: um `Box` com `position="absolute"`, `left` logo depois do nome, `display="none"` e `hover={{ display: 'flex' }}` dentro do `Box` com `key` da linha, que é o escopo do hover. Quando o nome não deixa espaço antes da contagem, usa `right={0}` e cobre a contagem (`+N -N`) só enquanto o ponteiro está ali. A linha não perde colunas.
+- O `⧉ abrir` é um `Button` `plain` com um `Text` de fundo `suggestion` (num terminal não dá para aumentar o glifo), com `key` próprio (`abrir:<caminho>`). O clique nele cai no `onPress` dele, não no da linha.
 - Fora do anel de foco: a API não tem prop para isso, e um `Button` escondido entra no anel do Tab e das setas. O hook `ui.focus` do painel desvia: quando o anel vai cair num `abrir:`, segue para o próximo elemento na mesma direção do movimento (comparando a posição de destino com a do elemento focado, na ordem do desenho); sem próximo, o anel fica onde está. A ordem dos `key` é guardada a cada desenho.
 - Teclado: tecla `e` com o painel focado abre o arquivo ou o diff da linha sob o anel (o mod já acompanha o anel em `ui.focus`). Numa pasta, nada.
 
 ### Falta
 
-1. Implementar: módulo puro `editor.ts` (escolha do editor, argv), snapshot do "antes", temporários e sua limpeza, o `⧉` e o desvio no `ui.focus`, a tecla `e`, testes, README.
-2. Testar o desvio do foco com o painel aberto durante um reload do mod (num teste do spike a navegação travou uma vez e não se repetiu).
+1. Testar o desvio do foco com o painel aberto durante um reload do mod (num teste do spike a navegação travou uma vez e não se repetiu).
 
 ## Fases
 
@@ -167,7 +166,7 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 4. ✓ **Modo foco**: projeção em `focus.ts`, regra do auto, tecla `f`, indicador `◉ foco` no cabeçalho.
 5. ✓ **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
 6. ✓ **Fechamento**: README do mod e da raiz, `marketplace.json`, atribuição ao original, teste manual num projeto grande.
-7. ⋯ **Abrir no editor**: o ícone `⧉` (no hover) ou a tecla `e` abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor"). Testes dos editores e spike do ícone feitos; falta a implementação.
+7. ✓ **Abrir no editor**: o botão `⧉ abrir` (no hover) ou a tecla `e` abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor").
 
 ## Testes
 
