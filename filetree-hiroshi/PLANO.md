@@ -126,6 +126,33 @@ Com um arquivo só ativo, sem foco: a janela segue o arquivo, como no original.
 - Implementação: os trechos são desenhados pelo elemento `Code` com `format: 'diff'` (números, cores e realce de sintaxe iguais aos diffs do Claude Code). A coluna de idade (`agora`, `12s`) ficou de fora, porque exigiria redesenhar o painel a cada segundo.
 - Rolagem: com a seção embaixo, a árvore rola numa janela própria (o corpo do painel é desenhado do tamanho exato, para a seção ficar sempre à vista). A janela segue o arquivo que o agente tocou por último; a roda do mouse sobre a árvore e o anel de foco do teclado a movem, e aí ela para de seguir até o próximo prompt.
 
+## Abrir no editor (fase 7, em andamento)
+
+Um ctrl+clique num arquivo da árvore o abre no editor; num bloco de Alterações, abre o diff. Zed e VS Code primeiro. Projeto já aberto no editor: o arquivo vira uma aba na janela dele, que vem para a frente. Projeto fechado: o editor abre o projeto com o arquivo em foco. O clique comum continua abrindo e fechando pastas e blocos.
+
+Descartado: um preview com realce de sintaxe dentro do próprio painel. Funcionaria (o elemento `Code`), mas o painel é estreito, o `Code` não rola sozinho e o editor dá diff lado a lado, edição e LSP.
+
+### Como abrir (testado em 2026-10-19, Zed 1.24.2 e VS Code 1.138.0, GNOME no Wayland)
+
+- **Zed:** `zed <pasta da sessão> <arquivo>:<linha>`. Reaproveita a janela cuja pasta contém a pasta passada, inclusive quando ela é uma subpasta do projeto aberto; se nenhuma contém, abre uma nova. A janela vem para a frente.
+- **VS Code:** só reaproveita a janela com **exatamente** a pasta passada; uma subpasta abre outra janela, e sem pasta o arquivo cai na última janela ativa, mesmo de outro projeto. Então o mod lê `~/.config/Code/User/globalStorage/storage.json` (`windowsState.openedWindows[].folder`), escolhe a pasta mais funda que contém o arquivo, senão a raiz do projeto, e chama sempre `code <pasta> -g <arquivo>:<linha>`.
+- **Diff:** os dois comparam dois arquivos, não uma revisão do git, e o "antes" vai para um arquivo temporário: `git show HEAD:<caminho>` para os arquivos do git; para os de fora, uma cópia feita no `tool.call` antes da primeira escrita do agente na sessão (o que dá também um "diff da sessão"). VS Code: `code <pasta> --diff <antes> <arquivo>` abre na janela certa. Zed: `zed --diff` sem a pasta abriu em outra janela.
+- Os dois editores sobem num processo próprio e sobrevivem ao fim do comando.
+- Qual editor: opção `userConfig` (`auto`, `zed` ou `code`); no `auto`, `TERM_PROGRAM` e depois o que estiver instalado (o `$EDITOR` pode ser um editor de terminal).
+
+### O gesto
+
+- O `Button` não informa as teclas modificadoras ao `onPress`. Quem informa é o `Client`: o `onPointer` recebe `button` (`left`, `middle`, `right`), `ctrl`, `shift` e `alt`, e o mod ouve por `surface.post` → `ui.message`. Cada linha da árvore e de Alterações ganha um `Client`; como o `down` prende o ponteiro até o `up`, ele provavelmente trata o clique comum também, e o `Button` fica para o teclado.
+- No Warp, o ctrl+clique chegou ao `Client` como clique comum (`ctrl: false`). Alternativas, se nenhuma tecla modificadora chegar: botão direito ou do meio, duplo clique, ou uma tecla com o painel focado (vale ter de qualquer jeito). O mod de teste está em `spikes/ctrl-click-teste/` (`claude --plugin-dir filetree-hiroshi/spikes/ctrl-click-teste`, depois `/ctrl-click-teste`); sai antes do merge.
+
+### Falta
+
+1. Conferir se `zed <pasta> --diff <antes> <arquivo>` abre na janela do projeto; se não, testar `zed -e` ou abrir o arquivo antes do diff.
+2. No Warp, testar shift, alt, botão direito e do meio com o mod de teste, e decidir o gesto.
+3. Confirmar se o `storage.json` do VS Code também se atualiza quando uma janela fecha.
+4. Spike do `Client` por linha convivendo com o `Button` (clique comum, ctrl+clique, teclado).
+5. Implementar: módulo puro `editor.ts` (escolha do editor, argv, pasta do VS Code), snapshot do "antes", temporários e sua limpeza, testes, README.
+
 ## Fases
 
 Cada fase termina carregável, com testes passando (`claude plugin validate`, `tsc -p`, `claude plugin test`) e um commit.
@@ -136,6 +163,7 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 4. ✓ **Modo foco**: projeção em `focus.ts`, regra do auto, tecla `f`, indicador `◉ foco` no cabeçalho.
 5. ✓ **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
 6. ✓ **Fechamento**: README do mod e da raiz, `marketplace.json`, atribuição ao original, teste manual num projeto grande.
+7. ⋯ **Abrir no editor**: ctrl+clique abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor"). Testes dos editores feitos; falta decidir o gesto e implementar.
 
 ## Testes
 
