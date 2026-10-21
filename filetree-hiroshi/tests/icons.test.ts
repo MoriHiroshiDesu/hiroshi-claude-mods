@@ -9,6 +9,8 @@ test('a whole file name wins over its extension', () => {
   expect(glyph('Dockerfile')).toBe(glyph('dockerfile'))
   expect(glyph('README.md')).not.toBe(glyph('notes.md'))
   expect(glyph('.env.local')).toBe(glyph('.env'))
+  expect(glyph('.env')).toBe('\uf023') // a padlock for the secrets
+  expect(glyph('.env')).not.toBe(glyph('package-lock.json'))
 })
 
 test('the Docker files get the whale, whatever they are called after the name', () => {

@@ -73,7 +73,7 @@ const BY_NAME: Record<string, Icon> = {
   '.gitattributes': icon('\ue65d', ORANGE),
   '.gitmodules': icon('\ue65d', ORANGE),
   '.editorconfig': icon('\ue652', GREY),
-  '.env': icon('\ue690', YELLOW),
+  '.env': icon('\uf023', YELLOW), // fa-lock: secrets; apart from the lockfiles' padlock
   license: icon('\ue60a', YELLOW),
   licence: icon('\ue60a', YELLOW),
   readme: icon(BOOK, BLUE),
