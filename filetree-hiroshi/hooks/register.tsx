@@ -42,6 +42,8 @@ import { moreLabel, project, RELEASE_MS, spreadOut } from './focus'
 import type { FocusRow } from './focus'
 import { codeAt, load, locate, noGit } from './git'
 import type { Run } from './git'
+import { iconFor, iconMode } from './icons'
+import type { IconMode } from './icons'
 import {
   ancestors,
   basename,
@@ -101,6 +103,8 @@ let drawnFrom = 0
 // The editor option (`auto`, `zed` or `code`), the editors on the PATH once looked up, the
 // element the focus ring is on, and the pane's focusable keys in drawing order.
 let editorSetting: unknown = 'auto'
+// The icons option: `nerd` draws a Nerd Font icon where a row had its ▾ ▸ ● ○ glyph.
+let iconsSetting: IconMode = 'off'
 let installed: Editor[] | undefined
 let focused: string | undefined
 let order: string[] = []
@@ -486,6 +490,7 @@ const stringField = (input: unknown, key: string): string | undefined => {
 
 export const register: Register = (on, options) => {
   editorSetting = options.editor ?? 'auto'
+  iconsSetting = iconMode(options.icons)
   installed = undefined
 
   // Git's index and HEAD change on every add, commit and checkout, made here or in another
@@ -743,23 +748,30 @@ export const register: Register = (on, options) => {
               const marked = markOf(act, now)
               // A collapsed folder with the agent inside pulses too.
               const busy = isDir && !open ? busyDirs.get(node.path) : undefined
-              const glyph = isDir ? (open ? '▾' : '▸') : marked === 'active' ? '●' : marked === 'recent' ? '○' : ' '
+              const icon = iconsSetting === 'nerd' ? iconFor(node.name, node.kind, open) : undefined
+              const glyph = icon ? icon.glyph : isDir ? (open ? '▾' : '▸') : marked === 'active' ? '●' : marked === 'recent' ? '○' : ' '
               const lead = `${INDENT.repeat(depth)}${glyph} `
               const tail = tailOf(g.lines[node.path], code)
               const fit = fitRow(lead, label, tail.map(part => part.text).join(' '), width)
               const gitColor: Color | undefined =
                 code && code !== '!' ? CODE_COLOR[code] : isDir ? (g.changed[node.path] ? 'warning' : 'suggestion') : undefined
               const glow = act && marked === 'active' ? shade(act.tone, beatNow) : busy ? shade(busy, beatNow) : undefined
-              const glyphColor = !isDir && act ? (marked === 'active' ? glow : baseShade(act.tone)) : undefined
+              const actColor = !isDir && act ? (marked === 'active' ? glow : baseShade(act.tone)) : undefined
+              // An icon takes the agent's color while it works there, else its type's; a folder's takes its name's.
+              const glyphColor = icon ? (actColor ?? (isDir ? (glow ?? gitColor) : icon.color)) : actColor
+              const dimmed = glow === undefined && (code === '!' || node.kind === 'link' || node.name.startsWith('.'))
               const line = (
                 <Button key={node.path} plain onPress={() => void press($, node.path)}>
                   <Text wrap="truncate-end">
                     {INDENT.repeat(depth)}
-                    <Text color={glyphColor}>{glyph}</Text>{' '}
+                    <Text color={glyphColor} dimColor={icon !== undefined && dimmed && actColor === undefined}>
+                      {glyph}
+                    </Text>
+                    {' '}
                     <Text
                       bold={node.path === t.cursor || glow !== undefined}
                       color={glow ?? gitColor}
-                      dimColor={glow === undefined && (code === '!' || node.kind === 'link' || node.name.startsWith('.'))}
+                      dimColor={dimmed}
                       italic={node.kind === 'link'}
                     >
                       {fit.name}

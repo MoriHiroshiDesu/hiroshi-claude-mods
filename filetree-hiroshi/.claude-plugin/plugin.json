@@ -10,12 +10,22 @@
     "editor": {
       "type": "string",
       "title": "Editor",
-      "description": "Onde o ícone ⧉ e a tecla e abrem arquivos e diffs: auto (o do terminal, senão o primeiro instalado), zed ou code",
+      "description": "Onde o ícone ⧉ abre arquivos e diffs: auto (o do terminal, senão o primeiro instalado), zed ou code",
       "default": "auto",
       "options": [
         "auto",
         "zed",
         "code"
+      ]
+    },
+    "icons": {
+      "type": "string",
+      "title": "Ícones",
+      "description": "Ícones de Nerd Fonts por tipo de arquivo e para pastas: off (padrão) ou nerd. Precisa de uma Nerd Font na fonte do terminal ou da Symbols Nerd Font Mono instalada; sem elas aparecem caixinhas",
+      "default": "off",
+      "options": [
+        "off",
+        "nerd"
       ]
     }
   }

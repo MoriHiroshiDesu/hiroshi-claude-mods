@@ -150,11 +150,51 @@ Descartados:
 - Só em arquivos (na árvore e nos blocos de Alterações), nunca em pastas. Aparece só com o ponteiro sobre a linha: um `Box` com `position="absolute"`, `left` logo depois do nome, `display="none"` e `hover={{ display: 'flex' }}` dentro do `Box` com `key` da linha, que é o escopo do hover. Quando o nome não deixa espaço antes da contagem, usa `right={0}` e cobre a contagem (`+N -N`) só enquanto o ponteiro está ali. A linha não perde colunas.
 - O `⧉ abrir` é um `Button` `plain` com um `Text` de fundo `suggestion` (num terminal não dá para aumentar o glifo), com `key` próprio (`abrir:<caminho>`). O clique nele cai no `onPress` dele, não no da linha.
 - Fora do anel de foco: a API não tem prop para isso, e um `Button` escondido entra no anel do Tab e das setas. O hook `ui.focus` do painel desvia: quando o anel vai cair num `abrir:`, segue para o próximo elemento na mesma direção do movimento (comparando a posição de destino com a do elemento focado, na ordem do desenho); sem próximo, o anel fica onde está. A ordem dos `key` é guardada a cada desenho.
-- Teclado: tecla `e` com o painel focado abre o arquivo ou o diff da linha sob o anel (o mod já acompanha o anel em `ui.focus`). Numa pasta, nada.
+- Só mouse: não há tecla para abrir no editor (uma tecla `e` foi cogitada e removida). Em pasta, o ícone não existe.
 
 ### Falta
 
 1. Testar o desvio do foco com o painel aberto durante um reload do mod (num teste do spike a navegação travou uma vez e não se repetiu).
+
+## Ícones por tipo de arquivo (fase 8, falta o teste manual)
+
+Ícones de Nerd Fonts na árvore: um por tipo de arquivo e um para pasta aberta ou fechada. Sem mudar a fonte do terminal.
+
+### O que o teste mostrou (2026-10-21, Warp no Linux, fonte do terminal Monaspace Krypton NF)
+
+- O Warp **faz fallback por glifo** para fontes do sistema. Instalar a `Symbols Nerd Font Mono` (v3.5.1, pacote `NerdFontsSymbolsOnly`) em `~/.local/share/fonts` e reiniciar o Warp bastou para desenhar glifos que a fonte do terminal não tem (`e7c6`, `e800`, `e8e8`). Não precisa trocar a fonte nem instalar o `10-nerd-font-symbols.conf` do pacote.
+- Cada glifo testado ocupa **1 coluna**: as barras de `|X|`, `|X |` e `|Xm|` alinham com a referência `|a|`, e o ícone não invade a letra seguinte. Vale para a faixa BMP (Seti, devicons, Font Awesome, Octicons: `E5FA` a `F2E0`) e para o Material (`F0001+`, fora do BMP).
+- Usar sempre a variante **Mono** da Symbols (a sem "Mono" desenha ícones de 1,5 coluna). Quem já usa uma fonte NF (`Mono` ou não) não precisa de nada.
+- Falta confirmar no painel real: largura dentro do Ink (`wrap="truncate-end"`) e a linha no limite da largura.
+
+### Decisões
+
+1. **Pasta**: o ícone de pasta aberta ou fechada **substitui** o `▾`/`▸`. A coluna do glifo continua uma só.
+2. **Arquivo**: o ícone do tipo **substitui** o `●`/`○` e ganha a cor ou o brilho da atividade (leitura, escrita, recente). Sem atividade, o ícone do arquivo tem a cor do tipo (a do status git fica só no nome) e o da pasta, a do nome. Arquivo oculto ou ignorado fica esmaecido, como o nome.
+3. **Ativação**: opção `icons` (`nerd` ou `off`) em `userConfig`, como a `editor`. Padrão `off`, porque o mod não consegue detectar se a fonte tem os glifos; sem a fonte, o padrão ligado mostraria caixinhas. Com `off`, a árvore fica exatamente como hoje.
+4. **Codepoints**: só faixas estáveis. `nf-seti`, `nf-dev`, `nf-fa` e `nf-oct` (BMP) e `nf-md` (`F0001+`, em JS é um par de surrogates, e `string-width` conta 1 coluna). Fora: os `nf-mdi` antigos (`F500` a `FD46`), removidos na Nerd Fonts v3.
+5. **Largura**: ícone + um espaço, sempre. `fitRow` recebe o `lead` já com o ícone, como hoje recebe o glifo.
+
+### Estrutura
+
+- `hooks/icons.ts` (puro, sem `$`): `iconFor(node, { open })` devolve `{ glyph, color }`. Ordem de busca: nome exato (`package.json`, `Dockerfile`, `.gitignore`, `README.md`, `LICENSE`…), depois extensão (`.ts`, `.tsx`, `.json`, `.md`, `.py`, `.rs`…), depois o ícone genérico de arquivo. Pasta: aberta ou fechada. Link simbólico: ícone próprio.
+- `register.tsx`: onde hoje calcula `glyph` (linha da árvore), chama `iconFor` quando `icons === 'nerd'`; senão, o caminho de hoje.
+- Fora do escopo da primeira versão: ícones nos blocos de Alterações (continuam com `▾`/`▸` do bloco), pastas especiais (`node_modules`, `src`, `.git`), cor própria por linguagem além do que já existe.
+
+### Feito
+
+`hooks/icons.ts` (tabela por nome e por extensão, códigos conferidos no `glyphnames.json` da v3.5.1), opção `icons` em `plugin.json`, ligação na linha da árvore em `register.tsx`, seção no README. Com `off` a saída é a de antes. Tudo no bloco Seti (`E5FA` a `E6B7`) e Font Awesome, que as Nerd Fonts antigas e a Krypton NF já têm.
+
+### Falta
+
+1. O teste manual no Warp, com `icons: nerd` em `/config` (ver abaixo).
+2. Decidir se vale ícone nos blocos de Alterações e pastas especiais, depois de ver a árvore.
+
+### Testes
+
+- `icons.test.ts`: nome exato ganha da extensão; extensão desconhecida e arquivo sem extensão caem no genérico; maiúsculas e minúsculas; pasta aberta e fechada diferem; **todo glifo da tabela tem largura 1**.
+- `pane.test.tsx`: com `icons: 'off'` a saída é igual à de hoje; com `nerd`, a linha mantém as colunas (cabe em 24 colunas) e a atividade colore o ícone.
+- Manual no Warp: painel estreito, nome truncado, linha com `+N -N`, hover do `⧉ abrir`, pulso do agente num arquivo e numa pasta recolhida.
 
 ## Fases
 
@@ -167,6 +207,7 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 5. ✓ **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
 6. ✓ **Fechamento**: README do mod e da raiz, `marketplace.json`, atribuição ao original, teste manual num projeto grande.
 7. ✓ **Abrir no editor**: o botão `⧉ abrir` (no hover; só mouse, sem tecla) abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor").
+8. **Ícones por tipo**: `icons.ts`, opção `icons` em `plugin.json`, árvore com ícone de pasta e de arquivo no lugar de `▾`/`▸` e `●`/`○` (detalhes em "Ícones por tipo de arquivo").
 
 ## Testes
 
@@ -181,3 +222,4 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 1. A seção de diffs guarda as alterações da **sessão inteira**; a tecla `c` limpa.
 2. Arquivos ignorados pelo `.gitignore` **aparecem**, apagados (inclusive `node_modules`, que fica recolhido e só é lido ao expandir). Só a pasta `.git` fica escondida.
 3. O painel **abre sozinho no início da sessão** (em tela cheia) e na primeira escrita. A árvore é só do diretório da sessão; escritas fora dele vão só para a seção de diffs (detalhes em "Abertura e escopo").
+4. Os ícones são **opcionais** (`icons: off` por padrão): o mod não detecta a fonte, e sem os glifos o painel mostraria caixinhas. Os ícones substituem os glifos `▾`/`▸` e `●`/`○`, sem coluna extra.
