@@ -8,7 +8,7 @@ Inspirado no [claude-code-filetree](https://github.com/data-goblin/claude-code-f
 
 - **Árvore do diretório da sessão**, com pastas antes e ordem natural. Clique ou Enter abre e fecha uma pasta.
 - **Status git por arquivo:** amarelo modificado, verde novo, vermelho apagado ou em conflito, apagado o que está no `.gitignore`. À direita, as linhas `+N -N` contra o último commit, somadas nas pastas. No cabeçalho, o total e a branch com ↑↓.
-- **Onde o agente está:** `●` pulsando em azul quando lê e em laranja quando escreve, `○` até o próximo prompt. A pasta do arquivo se abre e a árvore rola até ele.
+- **Onde o agente está:** `●` pulsando em azul quando lê e em laranja quando escreve, `○` até o próximo prompt (com os [ícones](#ícones) ligados, o próprio ícone do arquivo pulsa e fica na cor do tom até o próximo prompt). A pasta do arquivo se abre e a árvore rola até ele.
 - **Modo foco:** quando os arquivos ativos estão longe demais na árvore para caberem juntos, ela mostra só o caminho até eles e resume o resto em `⋯ N arquivos`. `f` fixa o foco ligado ou desligado; de novo, volta ao automático.
 - **Alterações:** abaixo da árvore, cada arquivo escrito na sessão com `+N -N` e os trechos alterados. O mais recente fica aberto; clique abre e fecha os outros. `d` recolhe a seção e `c` a limpa.
 - **Abrir no editor:** com o mouse sobre a linha de um arquivo aparece um botão `⧉ abrir` logo depois do nome (na ponta direita, sobre a contagem, quando o nome é comprido). Clicar nele abre o arquivo no Zed ou no VS Code; numa alteração, abre o diff. Se o projeto já está aberto no editor, o arquivo vira uma aba na janela dele; se não, o editor abre o projeto com o arquivo em foco. Ao clicar, um aviso (toast) no Claude Code confirma que o arquivo está sendo aberto. Só o mouse abre: não há atalho de teclado.
@@ -28,9 +28,29 @@ O painel de diff do próprio Claude Code (`/diff`) também abre sozinho quando o
 | `f` | foco: fixa ligado ou desligado, e de novo volta ao automático |
 | `d` | recolhe ou mostra as alterações |
 | `c` | limpa as alterações |
-| `e` ou clique no `⧉` | abre o arquivo no editor; numa alteração, o diff |
+| clique no `⧉` | abre o arquivo no editor; numa alteração, o diff |
 
 O `⧉` só aparece com o mouse sobre a linha e fica fora do Tab e das setas.
+
+## Ícones
+
+A opção `icons` do plugin (em `/config`) liga os ícones de Nerd Fonts: um por tipo de arquivo (TypeScript, JSON, Markdown, Dockerfile, `package.json`…) e um de pasta aberta ou fechada, no lugar do `▾`/`▸`. O padrão é `off`, porque o mod não tem como saber se o terminal tem os glifos: sem eles aparecem caixinhas.
+
+Com `nerd`, o ícone do arquivo tem a cor do tipo e o da pasta, a do nome (a do status git). Alguns têm ícone próprio: os arquivos e pastas de ferramentas de IA (`CLAUDE.md` e `.claude` com um asterisco que lembra o logo do Claude, `AGENTS.md`, `.agents`, `.cursor` e `.cursorrules` com um robô, `.codex`, `GEMINI.md`…) e os do Docker (`Dockerfile`, `Dockerfile.*`, `docker-compose*.yml`, `compose*.yaml`, `.dockerignore`, com a baleia). O botão `abrir` também troca o `⧉` por um ícone de link externo. Quando o agente lê ou escreve num arquivo, o ícone dele passa a ter a cor e o brilho da atividade, no lugar do `●`/`○`.
+
+Os glifos vêm da [Nerd Fonts](https://www.nerdfonts.com). O jeito seguro de tê-los é a fonte do terminal ser uma Nerd Font (o nome termina em `NF` ou `Nerd Font`), de qualquer versão a partir da 2.3.
+
+Os valores de `icons`:
+
+| Valor | O que faz |
+|---|---|
+| `off` (padrão) | a árvore com `▾`/`▸` e `●`/`○`, sem ícones |
+| `nerd` | os ícones, e os logos do Claude, da OpenAI, do Gemini e do Copilot e o robô dos agentes (da Nerd Fonts 3.5) quando o terminal consegue desenhá-los; senão, o asterisco, o cérebro, a varinha e outro robô, que a 2.3 já tinha |
+| `nerd-2.3` | os ícones, sempre só com os glifos da 2.3 |
+
+No `nerd`, o mod pergunta ao fontconfig no início de cada sessão (`fc-list`, cerca de 20 ms) se há uma fonte com os logos onde o terminal vai procurar. No Warp (detectado por `TERM_PROGRAM` ou `WARP_CLIENT_VERSION`, inclusive dentro de um `tmux`), só conta a fonte do terminal em `~/.config/warp-terminal/settings.toml`. Nos outros terminais conta qualquer fonte instalada, porque eles buscam nas outras fontes o glifo que falta na principal. Sem `fc-list` (macOS, Windows) ficam os glifos da 2.3. Use o `nerd-2.3` num terminal que não busca em outras fontes e cuja fonte é anterior à 3.5: lá os logos aparecem como caixinha.
+
+Sem trocar a fonte do terminal, dá para instalar a `Symbols Nerd Font Mono` (`NerdFontsSymbolsOnly.zip` na [página de releases](https://github.com/ryanoasis/nerd-fonts/releases/latest)), por exemplo em `~/.local/share/fonts` seguido de `fc-cache -f`, e reiniciar o terminal. Isso só funciona em terminais que buscam nas fontes do sistema os glifos que a fonte principal não tem. O terminal do GNOME busca. **O Warp não**: ele não consegue carregar essa fonte (`failed to load font 'SymbolsNFM'` no `~/.local/state/warp-terminal/warp.log`) e, quando precisa de um glifo que só ela tem, a tela inteira some. No Warp, use uma Nerd Font como fonte do terminal. Na Symbols, use a variante **Mono**: a outra desenha ícones mais largos que uma coluna.
 
 ## Editor
 

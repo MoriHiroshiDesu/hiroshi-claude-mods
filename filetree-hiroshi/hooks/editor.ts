@@ -7,6 +7,8 @@ export type Editor = 'zed' | 'code'
 
 export const EDITORS: readonly Editor[] = ['zed', 'code']
 export const OPENER = ' ⧉ abrir '
+// With the Nerd Font icons on, an "external link" icon (the same length) says it opens elsewhere.
+export const OPENER_NERD = ' \uf08e abrir '
 
 // The keys of the Buttons the focus ring passes over: a row's ⧉ in the tree and in the
 // changes section.
