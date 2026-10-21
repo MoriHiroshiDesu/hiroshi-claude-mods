@@ -565,11 +565,11 @@ test('a folder with an icon of its own keeps its color, unless git has something
   await filetree($)
   const ui = await mount($)
   const rows = await rowTexts(ui)
-  expect(rows).toContain('\uec82 .claude')
-  expect(rows).toContain('\uec20 .agents')
+  expect(rows).toContain('\uf069 .claude')
+  expect(rows).toContain('\ueb08 .agents')
   const glyphs = async (glyph: string) => (await ui.findAll({ type: 'Text', text: new RegExp(`^${glyph}$`) }))[0]?.props
-  expect((await glyphs('\uec82'))?.color).toBe('#d4a27f')
-  expect((await glyphs('\uec20'))?.color).toBe('#a074c4')
+  expect((await glyphs('\uf069'))?.color).toBe('#d4a27f')
+  expect((await glyphs('\ueb08'))?.color).toBe('#a074c4')
   expect((await glyphs('\uf07b'))?.color).toBe('suggestion') // a plain folder still takes its name's
   await ui.unmount()
 })

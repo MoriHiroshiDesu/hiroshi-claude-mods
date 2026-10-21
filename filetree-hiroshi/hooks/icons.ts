@@ -1,10 +1,11 @@
 // The Nerd Font icon of a tree row, as plain data: no `$`, so the tests drive it without the engine.
-// Every glyph sits in the Private Use Area of the BMP (Seti `E5FA`-`E6B7`, Font Awesome, Codicons),
-// one column wide in the terminal and one UTF-16 unit, which is how `fitRow` measures a row. The
-// Seti blocks come with every Nerd Font; the terminal's fallback draws what the font lacks from the
-// Symbols font. The Codicons logos (Claude, OpenAI) are from Nerd Fonts 3.5. The Material set
-// (`F0001`+) and the older `nf-mdi` range are left out on purpose: the first is two UTF-16 units,
-// the second was removed in Nerd Fonts 3.
+// Every glyph sits in the Private Use Area of the BMP, one column wide in the terminal and one
+// UTF-16 unit, which is how `fitRow` measures a row. Only glyphs that Nerd Fonts 2.3 already had
+// (checked against MesloLGS NF 2.3.3 and Monaspace Krypton NF): the terminal's own font must draw
+// them, because a terminal cannot be counted on to fall back to another font. Warp fails to load
+// the Symbols font and, asked for a glyph only it has, blanks the whole screen. So no Codicons past
+// `EBEB` (the Claude and OpenAI logos), no Font Awesome 5 and later (`fa-docker`), no Material set
+// (`F0001`+, two UTF-16 units) and no older `nf-mdi` range (`F500`-`FD46`, removed in Nerd Fonts 3).
 // Written as escapes: the glyphs are invisible in an editor without a Nerd Font.
 import type { NodeKind } from '../types'
 
@@ -40,12 +41,11 @@ const AGENT = '#a074c4'
 const OPENAI = '#10a37f'
 const DOCKER = '#2496ed'
 
-const CLAUDE = '\uec82'
-const ROBOT = '\uec20'
-const SPARKLE = '\uec10'
-const COPILOT = '\uec1e'
-const OPENAI_LOGO = '\uec81'
-const WHALE = '\uf21f'
+const CLAUDE = '\uf069' // fa-asterisk: Nerd Fonts has no Claude logo before 3.5
+const ROBOT = '\ueb08' // cod-hubot
+const SPARKLE = '\uf0d0' // fa-magic, for Gemini
+const BRAIN = '\ue28c' // fae-brain, for Codex
+const WHALE = '\uf308' // linux-docker
 
 const icon = (glyph: string, color?: string): Icon => ({ glyph, color })
 
@@ -67,7 +67,7 @@ const BY_NAME: Record<string, Icon> = {
   'agents.md': icon(ROBOT, AGENT),
   'gemini.md': icon(SPARKLE, BLUE),
   '.cursorrules': icon(ROBOT, AGENT),
-  'copilot-instructions.md': icon(COPILOT, AGENT),
+  'copilot-instructions.md': icon(ROBOT, AGENT),
   makefile: icon('\ue673', ORANGE),
   '.gitignore': icon('\ue65d', ORANGE),
   '.gitattributes': icon('\ue65d', ORANGE),
@@ -137,7 +137,7 @@ const BY_FOLDER: Record<string, Icon> = {
   '.agents': icon(ROBOT, AGENT),
   '.agent': icon(ROBOT, AGENT),
   '.cursor': icon(ROBOT, AGENT),
-  '.codex': icon(OPENAI_LOGO, OPENAI),
+  '.codex': icon(BRAIN, OPENAI),
   '.gemini': icon(SPARKLE, BLUE),
 }
 

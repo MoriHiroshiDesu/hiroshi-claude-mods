@@ -162,9 +162,10 @@ Descartados:
 
 ### O que o teste mostrou (2026-10-21, Warp no Linux, fonte do terminal Monaspace Krypton NF)
 
-- O Warp **faz fallback por glifo** para fontes do sistema. Instalar a `Symbols Nerd Font Mono` (v3.5.1, pacote `NerdFontsSymbolsOnly`) em `~/.local/share/fonts` e reiniciar o Warp bastou para desenhar glifos que a fonte do terminal não tem (`e7c6`, `e800`, `e8e8`). Não precisa trocar a fonte nem instalar o `10-nerd-font-symbols.conf` do pacote.
+- ~~O Warp faz fallback por glifo~~ (errado, corrigido no mesmo dia): o print do teste mostrava só os glifos que a Krypton NF já tem. O `~/.local/state/warp-terminal/warp.log` registra `failed to load font 'SymbolsNFM'` e, para cada glifo que só a Symbols tem, `Failed to get raster image` com `FontId` dela (`glyph_id` conferidos com fontTools: `e7c6`, `e800`, `e8e8`, `ec82`, `f21f`). No painel do Claude Code em tela cheia, isso **apaga a tela inteira** do Warp. O terminal do GNOME faz o fallback e desenha tudo.
+- Regra que sai disso: **só glifos que a Nerd Fonts 2.3 já tinha** (conferidos na MesloLGS NF 2.3.3 e na Monaspace Krypton NF), para a fonte do próprio terminal desenhar. O `icons.test.ts` confere as faixas.
 - Cada glifo testado ocupa **1 coluna**: as barras de `|X|`, `|X |` e `|Xm|` alinham com a referência `|a|`, e o ícone não invade a letra seguinte. Vale para a faixa BMP (Seti, devicons, Font Awesome, Octicons: `E5FA` a `F2E0`) e para o Material (`F0001+`, fora do BMP).
-- Usar sempre a variante **Mono** da Symbols (a sem "Mono" desenha ícones de 1,5 coluna). Quem já usa uma fonte NF (`Mono` ou não) não precisa de nada.
+- A Symbols serve para terminais com fallback (a variante **Mono**; a outra desenha ícones de 1,5 coluna). No Warp, só uma Nerd Font como fonte do terminal.
 - Falta confirmar no painel real: largura dentro do Ink (`wrap="truncate-end"`) e a linha no limite da largura.
 
 ### Decisões
@@ -179,14 +180,14 @@ Descartados:
 
 - `hooks/icons.ts` (puro, sem `$`): `iconFor(node, { open })` devolve `{ glyph, color }`. Ordem de busca: nome exato (`package.json`, `Dockerfile`, `.gitignore`, `README.md`, `LICENSE`…), depois extensão (`.ts`, `.tsx`, `.json`, `.md`, `.py`, `.rs`…), depois o ícone genérico de arquivo. Pasta: aberta ou fechada. Link simbólico: ícone próprio.
 - `register.tsx`: onde hoje calcula `glyph` (linha da árvore), chama `iconFor` quando `icons === 'nerd'`; senão, o caminho de hoje.
-- Ícones próprios (pedido depois do primeiro teste no Warp): IA e Docker. `CLAUDE.md`, `.claude` e `.claude-plugin` com o logo do Claude (`cod-claude`, Codicons da Nerd Fonts 3.5, em tan para não parecer o laranja de escrita do agente); `AGENTS.md`, `.agents`, `.cursor` e `.cursorrules` com o robô; `.codex` com o logo da OpenAI; `GEMINI.md` e `.gemini`; `copilot-instructions.md`. Pasta de IA tem um ícone só (aberta ou fechada) e mantém a cor dele, a não ser que o git tenha algo a dizer sobre ela. Docker: a baleia (`fa-docker`) em `Dockerfile`, `Dockerfile.*`, `docker-compose*.yml`, `compose*.yaml` e `.dockerignore`.
+- Ícones próprios (pedido depois do primeiro teste no Warp): IA e Docker. `CLAUDE.md`, `.claude` e `.claude-plugin` com o asterisco (`fa-asterisk`, que lembra o logo; o `cod-claude` é da Nerd Fonts 3.5 e apagou a tela do Warp), em tan para não parecer o laranja de escrita do agente; `AGENTS.md`, `.agents`, `.cursor`, `.cursorrules` e `copilot-instructions.md` com o robô (`cod-hubot`); `.codex` com o cérebro (`fae-brain`); `GEMINI.md` e `.gemini` com a varinha (`fa-magic`). Pasta de IA tem um ícone só (aberta ou fechada) e mantém a cor dele, a não ser que o git tenha algo a dizer sobre ela. Docker: a baleia (`linux-docker`; a `fa-docker` é da 3.x) em `Dockerfile`, `Dockerfile.*`, `docker-compose*.yml`, `compose*.yaml` e `.dockerignore`.
 - O botão de abrir vira ` \uf08e abrir ` (link externo, do mesmo tamanho) com `icons: nerd`; com `off` continua o `⧉`.
 - Os glifos ficam no código como `\uXXXX`: gravados direto, são invisíveis num editor sem Nerd Font.
 - Fora do escopo: ícones nos blocos de Alterações (continuam com `▾`/`▸` do bloco), outras pastas especiais (`node_modules`, `src`, `.github`), cor própria por linguagem além do que já existe.
 
 ### Feito
 
-`hooks/icons.ts` (tabela por nome e por extensão, códigos conferidos no `glyphnames.json` da v3.5.1), opção `icons` em `plugin.json`, ligação na linha da árvore em `register.tsx`, seção no README. Com `off` a saída é a de antes. Tudo no bloco Seti (`E5FA` a `E6B7`) e Font Awesome, que as Nerd Fonts antigas e a Krypton NF já têm.
+`hooks/icons.ts` (tabela por nome e por extensão, códigos conferidos no `glyphnames.json` da v3.5.1), opção `icons` em `plugin.json`, ligação na linha da árvore em `register.tsx`, seção no README. Com `off` a saída é a de antes. Só glifos da Nerd Fonts 2.3 (Seti, devicons, Font Awesome 4.7, Codicons até `EBEB`, Font Logos, Octicons, Font Awesome Extension).
 
 ### Falta
 

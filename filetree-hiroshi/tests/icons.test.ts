@@ -88,6 +88,30 @@ test('every icon is one BMP Private Use Area character, one column wide', () => 
   }
 })
 
+// The Private Use Area blocks Nerd Fonts 2.3 already filled, so the terminal's own Nerd Font has
+// every glyph. Font Awesome stops at 4.7 there: \uf21f (fa-docker) came with 3.x, as did the
+// Codicons past \uebeb (the Claude and OpenAI logos).
+const NF2 = [[0xe200, 0xe2a9], [0xe5fa, 0xe6aa], [0xe700, 0xe7c5], [0xea60, 0xebeb], [0xf000, 0xf2e0], [0xf300, 0xf32f], [0xf400, 0xf4a9]]
+const NF3_ONLY = ['\uf21f', '\uec10', '\uec1e', '\uec20', '\uec81', '\uec82']
+
+test('every glyph is one Nerd Fonts 2.3 already had: a terminal may not fall back to another font', () => {
+  const files = ['a.ts', 'a.tsx', 'a.js', 'a.json', 'a.html', 'a.css', 'a.scss', 'a.md', 'a.py', 'a.java', 'a.kt', 'a.go', 'a.rs', 'a.rb', 'a.php',
+    'a.c', 'a.cpp', 'a.cs', 'a.swift', 'a.dart', 'a.lua', 'a.zig', 'a.ex', 'a.hs', 'a.scala', 'a.vue', 'a.svelte', 'a.sh', 'a.ps1', 'a.yml', 'a.toml',
+    'a.xml', 'a.svg', 'a.sql', 'a.csv', 'a.lock', 'a.gradle', 'a.png', 'a.pdf', 'a.zip', 'a.mp4', 'a.mp3', 'a.ttf', 'a.txt', 'x.nope', 'package.json',
+    'package-lock.json', 'tsconfig.json', 'Dockerfile', 'compose.yaml', 'Makefile', '.gitignore', '.env', 'LICENSE', 'README.md', 'CLAUDE.md',
+    'AGENTS.md', 'GEMINI.md', '.cursorrules', 'copilot-instructions.md']
+  const glyphs = [
+    ...files.map(n => iconFor(n, 'file').glyph),
+    ...['d', '.claude', '.claude-plugin', '.agents', '.cursor', '.codex', '.gemini'].flatMap(n => [iconFor(n, 'dir', true).glyph, iconFor(n, 'dir', false).glyph]),
+    iconFor('l', 'link').glyph,
+  ]
+  for (const g of glyphs) {
+    const cp = g.codePointAt(0) as number
+    expect(NF2.some(([from, to]) => cp >= (from as number) && cp <= (to as number))).toBe(true)
+    expect(NF3_ONLY).not.toContain(g)
+  }
+})
+
 test('only the value nerd turns the icons on', () => {
   expect(iconMode('nerd')).toBe('nerd')
   for (const setting of ['off', undefined, '', 'NERD', true, 1, null]) expect(iconMode(setting)).toBe('off')
