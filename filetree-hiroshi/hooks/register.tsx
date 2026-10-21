@@ -1,5 +1,5 @@
 // filetree-hiroshi: the session's folder as a tree in a side pane, and the changes the agent made.
-//   Inspired by data-goblin/claude-code-filetree (MIT). Phases 1 to 5 of filetree-hiroshi/PLANO.md:
+//   Inspired by data-goblin/claude-code-filetree (MIT). Phases 1 to 5 of the plan:
 //   the pane, the tree read on demand, folders opened and closed by a press, /filetree to
 //   open or close it, git's view of each row (color, lines added and removed, branch), and
 //   where the agent reads and writes: a pulsing ● while active, ○ for the rest of the turn,

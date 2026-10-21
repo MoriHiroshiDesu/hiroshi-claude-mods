@@ -34,6 +34,8 @@ O `⧉` só aparece com o mouse sobre a linha e fica fora do Tab e das setas.
 
 ## Ícones
 
+Para onde e como mudar as opções, e o que fazer quando não pegam, veja o [guia de configuração](CONFIGURACAO.md).
+
 A opção `icons` do plugin (em `/config`) liga os ícones de Nerd Fonts: um por tipo de arquivo (TypeScript, JSON, Markdown, Dockerfile, `package.json`…) e um de pasta aberta ou fechada, no lugar do `▾`/`▸`. O padrão é `off`, porque o mod não tem como saber se o terminal tem os glifos: sem eles aparecem caixinhas.
 
 Com `nerd`, o ícone do arquivo tem a cor do tipo e o da pasta, a do nome (a do status git). Alguns têm ícone próprio: os arquivos e pastas de ferramentas de IA (`CLAUDE.md` e `.claude` com um asterisco que lembra o logo do Claude, `AGENTS.md`, `.agents`, `.cursor` e `.cursorrules` com um robô, `.codex`, `GEMINI.md`…) e os do Docker (`Dockerfile`, `Dockerfile.*`, `docker-compose*.yml`, `compose*.yaml`, `.dockerignore`, com a baleia). O botão `abrir` também troca o `⧉` por um ícone de link externo. Quando o agente lê ou escreve num arquivo, o ícone dele passa a ter a cor e o brilho da atividade, no lugar do `●`/`○`.
@@ -74,5 +76,3 @@ claude plugin validate filetree-hiroshi
 claude plugin test "$PWD/filetree-hiroshi"
 npx tsc -p filetree-hiroshi   # depois que o Claude Code carregou o mod e gravou os tipos
 ```
-
-O plano e as decisões estão em [PLANO.md](PLANO.md).
