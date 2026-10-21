@@ -126,6 +126,36 @@ Com um arquivo só ativo, sem foco: a janela segue o arquivo, como no original.
 - Implementação: os trechos são desenhados pelo elemento `Code` com `format: 'diff'` (números, cores e realce de sintaxe iguais aos diffs do Claude Code). A coluna de idade (`agora`, `12s`) ficou de fora, porque exigiria redesenhar o painel a cada segundo.
 - Rolagem: com a seção embaixo, a árvore rola numa janela própria (o corpo do painel é desenhado do tamanho exato, para a seção ficar sempre à vista). A janela segue o arquivo que o agente tocou por último; a roda do mouse sobre a árvore e o anel de foco do teclado a movem, e aí ela para de seguir até o próximo prompt.
 
+## Abrir no editor (fase 7, em andamento)
+
+Um botão `⧉ abrir`, com fundo colorido, logo depois do nome do arquivo (na ponta direita, sobre a contagem, quando o nome não deixa espaço) abre no editor o arquivo da árvore ou, num bloco de Alterações, o diff (no Zed, o arquivo; ver "Diff" abaixo). Zed e VS Code primeiro. Projeto já aberto no editor: o arquivo vira uma aba na janela dele, que vem para a frente. Projeto fechado: o editor abre o projeto com o arquivo em foco. O clique na linha continua abrindo e fechando pastas e blocos.
+
+Descartados:
+- um preview com realce de sintaxe dentro do próprio painel. Funcionaria (o elemento `Code`), mas o painel é estreito, o `Code` não rola sozinho e o editor dá diff lado a lado, edição e LSP;
+- o ctrl+clique. O `Button` não informa as teclas modificadoras; o `Client` informa, mas no Warp o ctrl+clique chegou como clique comum (`ctrl: false`). Exigiria também um `Client` por linha tratando o clique comum.
+
+### Como abrir (testado em 2026-10-19 e 2026-10-20, Zed 1.24.2 e 1.24.4, VS Code 1.138.0 e 1.126.0, GNOME no Wayland)
+
+- **Zed:** `zed <pasta da sessão> <arquivo>:<linha>` reaproveita a janela do projeto e a traz para a frente. Mas, quando o projeto não tem janela, o Zed 1.24 o acrescenta à janela ativa, ao lado do projeto que estiver lá (visto com o `e-saude` aberto). `zed -n` abre uma janela nova sempre, mesmo com o projeto já aberto. O CLI não lista janelas; o banco do Zed (`~/.local/share/zed/db/0-stable/db.sqlite`) sim: `kv_store.session_id` é a sessão em curso, cada projeto aberto é uma linha de `workspaces` com esse `session_id` e o `window_id` da janela, e o `session_id` some da linha quando a janela fecha. O mod lê isso com `python3` (o `sqlite3` costuma não estar instalado): se a raiz está aberta sozinha numa janela, `zed <raiz> <arquivo>`; senão, `zed -n <raiz> <arquivo>`. Se a leitura falhar (sem `python3`, formato mudou), cai no comando sem `-n`.
+- **VS Code:** só reaproveita a janela com **exatamente** a pasta passada; uma subpasta abre outra janela, e sem pasta o arquivo cai na última janela ativa, mesmo de outro projeto. O mod chama sempre `code <raiz do projeto> -g <arquivo>:<linha>`, a raiz sendo a pasta da sessão. Quem abriu no VS Code só uma subpasta do projeto ganha uma janela nova: limitação no README. Descartado: ler as janelas abertas do `~/.config/Code/User/globalStorage/storage.json` (`windowsState.openedWindows`), que não tira a janela da lista quando ela fecha (só ao sair do VS Code). `code --status` dá a lista ao vivo, mas com o nome curto da pasta e em ~3 s.
+- **Diff:** os editores comparam dois arquivos, não uma revisão do git, e o "antes" vai para um arquivo temporário: `git show HEAD:<caminho>` para os arquivos do git; para os de fora, uma cópia feita no `tool.call` antes da primeira escrita do agente na sessão (o que dá também um "diff da sessão").
+  - VS Code: `code <raiz> --diff <antes> <arquivo>` abre o diff lado a lado como aba na janela do projeto.
+  - Zed: o `--diff` não reaproveita janela em nenhuma forma testada. `zed --diff <antes> <arquivo> <pasta>` abre uma janela nova da pasta, mesmo com ela aberta; sem a pasta, uma janela do diretório de onde o comando rodou (inclusive rodando de dentro da pasta do projeto); com `-e`, acrescenta esse diretório como projeto na primeira janela existente (o Zed 1.24 guarda vários projetos numa janela) e troca para ele. E o `--diff` tem de vir antes dos caminhos: depois do primeiro caminho, tudo é lido como caminho (`<pasta> --diff a b` abre um arquivo chamado `--diff`). Então no Zed o `⧉` de Alterações abre só o arquivo, `zed <raiz> <arquivo>:<linha do trecho mais recente>`, que cai na janela certa e mostra na margem as alterações em relação ao HEAD. Arquivos fora do git ficam sem marca de alteração no Zed.
+- Os dois editores sobem num processo próprio e sobrevivem ao fim do comando.
+- Qual editor: opção `userConfig` (`auto`, `zed` ou `code`); no `auto`, `TERM_PROGRAM` e depois o que estiver instalado (o `$EDITOR` pode ser um editor de terminal).
+- Nesta máquina o `zed` do PATH é um wrapper (`~/.local/bin/zed-project`): num projeto com `.zed/theme` ou overrides de tema, ele abre o Zed com `--user-data-dir` próprio, numa instância separada, e a janela já aberta pode não ser reaproveitada. Fora disso ele só repassa ao binário. Fica como limitação conhecida, não como caso a tratar.
+
+### O ícone (spike validado em 2026-10-20, Warp)
+
+- Só em arquivos (na árvore e nos blocos de Alterações), nunca em pastas. Aparece só com o ponteiro sobre a linha: um `Box` com `position="absolute"`, `left` logo depois do nome, `display="none"` e `hover={{ display: 'flex' }}` dentro do `Box` com `key` da linha, que é o escopo do hover. Quando o nome não deixa espaço antes da contagem, usa `right={0}` e cobre a contagem (`+N -N`) só enquanto o ponteiro está ali. A linha não perde colunas.
+- O `⧉ abrir` é um `Button` `plain` com um `Text` de fundo `suggestion` (num terminal não dá para aumentar o glifo), com `key` próprio (`abrir:<caminho>`). O clique nele cai no `onPress` dele, não no da linha.
+- Fora do anel de foco: a API não tem prop para isso, e um `Button` escondido entra no anel do Tab e das setas. O hook `ui.focus` do painel desvia: quando o anel vai cair num `abrir:`, segue para o próximo elemento na mesma direção do movimento (comparando a posição de destino com a do elemento focado, na ordem do desenho); sem próximo, o anel fica onde está. A ordem dos `key` é guardada a cada desenho.
+- Teclado: tecla `e` com o painel focado abre o arquivo ou o diff da linha sob o anel (o mod já acompanha o anel em `ui.focus`). Numa pasta, nada.
+
+### Falta
+
+1. Testar o desvio do foco com o painel aberto durante um reload do mod (num teste do spike a navegação travou uma vez e não se repetiu).
+
 ## Fases
 
 Cada fase termina carregável, com testes passando (`claude plugin validate`, `tsc -p`, `claude plugin test`) e um commit.
@@ -136,6 +166,7 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 4. ✓ **Modo foco**: projeção em `focus.ts`, regra do auto, tecla `f`, indicador `◉ foco` no cabeçalho.
 5. ✓ **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
 6. ✓ **Fechamento**: README do mod e da raiz, `marketplace.json`, atribuição ao original, teste manual num projeto grande.
+7. ✓ **Abrir no editor**: o botão `⧉ abrir` (no hover) ou a tecla `e` abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor").
 
 ## Testes
 

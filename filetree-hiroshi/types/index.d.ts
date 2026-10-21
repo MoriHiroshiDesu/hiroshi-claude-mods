@@ -69,6 +69,11 @@ export type Change = {
 // together (`engaged`); `on` and `off` are the person's, from the f key, until they press it again.
 export type Focus = { mode: 'auto' | 'on' | 'off'; engaged: boolean }
 
+// The before side of the diffs VS Code opens: this session's folder of temporary files, and
+// for each file the agent wrote, the copy taken before its first write ('' when the file
+// did not exist yet). Files git has in HEAD are compared with that version instead.
+export type Before = { dir: string; files: Record<string, string> }
+
 declare module 'claude-code' {
   interface PluginState {
     'filetree-hiroshi': {
@@ -79,6 +84,7 @@ declare module 'claude-code' {
       pulse: number
       changes: Change[]
       focus: Focus
+      before: Before
     }
   }
 }

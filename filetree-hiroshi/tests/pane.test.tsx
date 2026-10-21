@@ -35,8 +35,13 @@ function engine(on: any, repo = true, extra: FsEntry[] = []) {
   const listed: string[] = []
   const statuses: number[] = []
   const opened: string[] = []
+  const runs: string[][] = []
+  const toasts: string[] = []
+  const focusedOn: (string | undefined)[] = []
+  const files: Record<string, string> = {} // what $.fs.read and $.fs.write see
   const panes = { open: false }
   on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
+  on('session.end', () => ({ sessionId: 's1' }))
   on('session.cwd', () => ({ value: '/work' }))
   on('command.register', () => ({ value: undefined }))
   on('classic.FileChanged', () => ({}))
@@ -45,12 +50,19 @@ function engine(on: any, repo = true, extra: FsEntry[] = []) {
     return { value: [...(DISK[e.path] ?? []), ...(e.path === '/work' ? extra : [])] }
   })
   on('fs.exists', (_$: any, e: any) => ({ value: e.path in DISK || Object.entries(DISK).some(([d, es]) => es.some(f => `${d}/${f.name}` === e.path)) }))
-  on('process.run', (_$: any, e: any) => (e.argv.includes('status') && statuses.push(1), {
+  on('process.run', (_$: any, e: any) => (runs.push([...e.argv]), e.argv.includes('status') && statuses.push(1), {
     value: { ...(repo ? gitOut(e.argv) : { exitCode: 128, stdout: '' }), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
   }))
   on('ui.open', (_$: any, e: any) => ((panes.open = true), opened.push(e.id), { value: { isPlaced: true } }))
   on('ui.panes', () => ({ value: panes.open ? [{ id: PANE, title: 'filetree', isShown: true, isFocused: false, isPlaced: true }] : [] }))
   on('ui.close', () => ((panes.open = false), { value: undefined }))
+  on('ui.toast', (_$: any, e: any) => (toasts.push(e.text), { value: undefined }))
+  on('ui.focus', (_$: any, e: any) => (focusedOn.push(e.element), {}))
+  on('fs.read', (_$: any, e: any) => {
+    if (!(e.path in files)) throw new Error(`ENOENT ${e.path}`)
+    return { value: files[e.path] }
+  })
+  on('fs.write', (_$: any, e: any) => ((files[e.path] = e.text), { value: undefined }))
   on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => {
     const { Text } = $.ui.resolve(e)
     return <Text>engine</Text> // the engine's own band
@@ -63,7 +75,7 @@ function engine(on: any, repo = true, extra: FsEntry[] = []) {
         ? { result: { filePath: e.file_path, structuredPatch: [{ oldStart: 3, oldLines: 2, newStart: 3, newLines: 2, lines: [' keep', `-${e.old_string}`, `+${e.new_string}`] }] }, text: 'ok' }
         : { result: {}, text: 'ok' },
   )
-  return { clock, listed, panes, statuses, opened }
+  return { clock, listed, panes, statuses, opened, runs, toasts, focusedOn, files }
 }
 
 const start = ($: any) => $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
@@ -346,9 +358,112 @@ test('the tree scrolls in a window of its own that follows the agent, the change
   const rows = await rowTexts(ui)
   expect(rows).toContain('● README.md')
   expect(rows).not.toContain('▸ dist') // the window moved down to README.md
-  // the pane's body never outgrows its rows, so the engine has nothing to scroll
-  const drawn = (await ui.findAll({ type: 'Button' })).length + (await ui.findAll({ type: 'Code' })).length * 3
+  // the pane's body never outgrows its rows, so the engine has nothing to scroll (the ⧉
+  // icons sit over their rows, and the e key's Button beside f)
+  const lines = (await ui.findAll({ type: 'Button' })).filter((b: any) => !b.key?.startsWith('abrir'))
+  const drawn = lines.length + (await ui.findAll({ type: 'Code' })).length * 3
   expect(drawn).toBeLessThanOrEqual(14)
   expect(await ui.find({ type: 'Code' })).toBeDefined()
   await ui.unmount()
 })
+
+// The person's Tab, arrows or click moving the pane's focus ring onto `element`.
+const tab = ($: any, element: string) => $.ui.focus({ component: 'Pane', requestId: PANE, element, origin: { kind: 'person' } } as any)
+
+// The editor's commands among the ones run: what is neither git nor which.
+const editorRuns = (runs: string[][]) => runs.filter(argv => argv[0] === 'zed' || argv[0] === 'code')
+
+test('a file\'s row has a ⧉ that opens it in the editor, with the project folder', { options: { editor: 'zed' } }, async ($, on) => {
+  const { runs } = engine(on)
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  expect(await ui.find({ key: 'abrir:/work/README.md' })).toBeDefined()
+  expect(await ui.find({ key: 'abrir:/work/src' })).toBeUndefined() // folders have none
+  // the tree's rows read as before: the icon is drawn over them, shown under the pointer
+  expect(await rowTexts(ui)).toContain('  README.md')
+  await ui.press({ key: 'abrir:/work/README.md' })
+  expect(editorRuns(runs)).toEqual([['zed', '/work', '/work/README.md']])
+  await ui.unmount()
+})
+
+test('in VS Code a change opens as a diff with HEAD\'s version written to the session\'s folder', { options: { editor: 'code' } }, async ($, on) => {
+  const { runs } = engine(on)
+  await start($)
+  await $.tool.call(edit('/work/README.md') as any)
+  const ui = await mount($)
+  await ui.press({ key: 'abrir-diff:/work/README.md' })
+  expect(runs).toContainEqual(['git', '-C', '/work', 'show', 'HEAD:./README.md'])
+  const [diff] = editorRuns(runs)
+  expect(diff?.slice(0, 3)).toEqual(['code', '/work', '--diff'])
+  expect(diff?.[3]).toMatch(/^\/tmp\/filetree-hiroshi-\d+\/[0-9a-z]+\/README\.md\.HEAD$/)
+  expect(diff?.[4]).toBe('/work/README.md')
+  await ui.unmount()
+})
+
+test('in Zed a change opens as the file at its newest hunk', { options: { editor: 'zed' } }, async ($, on) => {
+  const { runs } = engine(on)
+  await start($)
+  await $.tool.call(edit('/work/README.md') as any)
+  const ui = await mount($)
+  await ui.press({ key: 'abrir-diff:/work/README.md' })
+  expect(editorRuns(runs)).toEqual([['zed', '/work', '/work/README.md:3']])
+  await ui.unmount()
+})
+
+test('with no editor found a press says so', async ($, on) => {
+  const { runs, toasts } = engine(on)
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  await ui.press({ key: 'abrir:/work/README.md' })
+  expect(editorRuns(runs)).toEqual([])
+  expect(toasts.some(t => /nenhum editor/.test(t))).toBe(true)
+  await ui.unmount()
+})
+
+test('the focus ring steps past the icons, and e opens the row it is on', { options: { editor: 'zed' } }, async ($, on) => {
+  const { runs, focusedOn, toasts } = engine(on)
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  // landing on a ⧉ from elsewhere: its own row instead
+  await tab($, 'abrir:/work/notes.md')
+  expect(focusedOn.at(-1)).toBe('/work/notes.md')
+  // from its own row (Tab): on to the next row
+  await tab($, 'abrir:/work/notes.md')
+  expect(focusedOn.at(-1)).toBe('/work/README.md')
+  // Tab from the last row: round to the first that is no icon
+  await tab($, 'abrir:/work/README.md')
+  expect(focusedOn.at(-1)).toBe('focus')
+  await tab($, '/work/README.md')
+  await ui.press({ key: 'abrir-focado' })
+  expect(editorRuns(runs)).toEqual([['zed', '/work', '/work/README.md']])
+  // on a folder, e only says what it does
+  await tab($, '/work/src')
+  await ui.press({ key: 'abrir-focado' })
+  expect(editorRuns(runs)).toHaveLength(1)
+  expect(toasts.at(-1)).toMatch(/e abre/)
+  await ui.unmount()
+})
+
+test('a first write keeps a copy of the file as it was, and the session\'s end removes the folder', async ($, on) => {
+  const { runs, files } = engine(on)
+  await start($)
+  files['/work/new.txt'] = 'old text'
+  await $.tool.call(edit('/work/new.txt') as any)
+  await $.tool.call(edit('/work/brand-new.txt') as any)
+  const copies = () => Object.keys(files).filter(path => path.startsWith('/tmp/'))
+  // one copy, of the file that existed; none for the new one
+  expect(copies()).toHaveLength(1)
+  const [copy] = copies() as [string]
+  expect(copy).toMatch(/^\/tmp\/filetree-hiroshi-\d+\/[0-9a-z]+\/new\.txt\.antes$/)
+  expect(files[copy]).toBe('old text')
+  // a second write keeps the first copy
+  files['/work/new.txt'] = 'newer text'
+  await $.tool.call(edit('/work/new.txt') as any)
+  expect(files[copy]).toBe('old text')
+  await $.session.end({ reason: 'other' } as any)
+  expect(runs).toContainEqual(['rm', '-rf', copy.split('/').slice(0, 3).join('/')])
+})
+

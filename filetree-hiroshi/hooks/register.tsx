@@ -11,12 +11,34 @@
 //   Below the tree, the changes section shows each written file's hunks, the newest open
 //   (d folds it, c clears it). The tree scrolls in a window of its own, so the section stays
 //   in view: the pane's body is drawn to fit, and the wheel and the focus ring move the window.
+//   A ⧉ abrir chip after a file's name, shown under the pointer, opens it in Zed or VS Code; on
+//   a change, its diff (in Zed, the file: see editor.ts). The e key opens the focused row's.
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Register, Timer } from 'claude-code'
 
-import type { Act, Change, Focus, GitCode, GitState, Hunk, Panel, Tone, Tree } from '../types'
+import type { Act, Before, Change, Focus, GitCode, GitState, Hunk, Panel, Tone, Tree } from '../types'
 import { absolute, activeFolders, anyActive, baseShade, gitChanges, mark, markOf, pathWords, SEARCH_LIMIT, shade, shownPath } from './activity'
 import { hunksOf, layout, normalizeChange, recordChange } from './diff'
+import {
+  beforePath,
+  chooseEditor,
+  diffArgv,
+  diffKey,
+  EDITORS,
+  hasOwnWindow,
+  OPENER,
+  installedFrom,
+  isIcon,
+  isTempDir,
+  needsBefore,
+  OPEN_FOCUSED,
+  openArgv,
+  openKey,
+  skipIcons,
+  tempDir,
+  ZED_WINDOWS_PY,
+} from './editor'
+import type { Editor, ZedWorkspace } from './editor'
 import { moreLabel, project, RELEASE_MS, spreadOut } from './focus'
 import type { FocusRow } from './focus'
 import { codeAt, load, locate, noGit } from './git'
@@ -24,6 +46,7 @@ import type { Run } from './git'
 import {
   ancestors,
   basename,
+  dirname,
   emptyTree,
   expand,
   fitRow,
@@ -63,6 +86,7 @@ const activity = atom({ plugin: 'filetree-hiroshi', key: 'activity' } as const, 
 const pulse = atom({ plugin: 'filetree-hiroshi', key: 'pulse' } as const, 0)
 const changes = atom({ plugin: 'filetree-hiroshi', key: 'changes' } as const, [] as Change[])
 const focus = atom({ plugin: 'filetree-hiroshi', key: 'focus' } as const, { mode: 'auto', engaged: false } as Focus)
+const before = atom({ plugin: 'filetree-hiroshi', key: 'before' } as const, { dir: '', files: {} } as Before)
 
 // Read again at every session.start, which a reload raises too.
 let home = ''
@@ -73,6 +97,12 @@ let opensAtStart = false
 // The rows the tree's window has, and the first one it showed, as last drawn.
 let room = 20
 let drawnFrom = 0
+// The editor option (`auto`, `zed` or `code`), the editors on the PATH once looked up, the
+// element the focus ring is on, and the pane's focusable keys in drawing order.
+let editorSetting: unknown = 'auto'
+let installed: Editor[] | undefined
+let focused: string | undefined
+let order: string[] = []
 
 const runner =
   ($: EngineInterface): Run =>
@@ -307,12 +337,107 @@ function tailOf(lines: readonly [number, number] | undefined, code: GitCode | un
   return parts
 }
 
+const NO_EDITOR = 'filetree: nenhum editor encontrado (zed ou code no PATH); escolha um nas opções do plugin'
+
+// The agent's first write to a file this session: a copy of the file as it was, the before
+// side of its diff when git has no version of it.
+async function snapshot($: EngineInterface, path: string) {
+  const b = await read($, before)
+  if (!b.dir || path in b.files) return
+  const was = await $.fs.read(path).then(
+    text => (typeof text === 'string' ? text : undefined),
+    () => undefined,
+  )
+  const copy = was === undefined ? '' : beforePath(b.dir, path, 'antes')
+  if (was !== undefined) await $.fs.write(copy, was)
+  await update($, before, cur => ({ ...cur, files: { ...cur.files, [path]: copy } }))
+}
+
+// The before side of a file's diff: HEAD's version when git has one, else the copy from
+// before the agent's first write, else an empty file (the file is new).
+async function beforeFile($: EngineInterface, path: string): Promise<string> {
+  const b = await read($, before)
+  const head = await $.process.run(['git', '-C', dirname(path), 'show', `HEAD:./${basename(path)}`], { timeoutMs: 5000 }).catch(() => undefined)
+  if (head?.exitCode === 0 && !head.isStdoutTruncated) {
+    const file = beforePath(b.dir, path, 'HEAD')
+    await $.fs.write(file, head.stdout)
+    return file
+  }
+  if (b.files[path]) return b.files[path] as string
+  const empty = beforePath(b.dir, path, 'antes')
+  await $.fs.write(empty, '')
+  return empty
+}
+
+async function chosenEditor($: EngineInterface): Promise<Editor | undefined> {
+  if (editorSetting === 'zed' || editorSetting === 'code') return editorSetting
+  installed ??= await $.process.run(['which', ...EDITORS], { timeoutMs: 5000 }).then(
+    ran => installedFrom(ran.stdout),
+    () => [],
+  )
+  const term = await $.env.get('TERM_PROGRAM').catch(() => undefined)
+  return chooseEditor(editorSetting, term ?? undefined, installed)
+}
+
+// The editor's command returns at once (it hands the path to the editor already running, or
+// starts one that outlives it); a failure is told in a toast.
+async function launch($: EngineInterface, argv: readonly string[]) {
+  const ran = await $.process.run(argv, { timeoutMs: 15000 }).catch((err: unknown) => (err instanceof Error ? err : new Error(String(err))))
+  if (ran instanceof Error) $.ui.toast(`filetree: não deu para rodar o ${argv[0]}: ${ran.message}`)
+  else if (ran.exitCode !== 0) $.ui.toast(`filetree: ${argv[0]} saiu com ${ran.exitCode}${ran.stderr.trim() ? `: ${ran.stderr.trim().split('\n')[0]}` : ''}`)
+}
+
+// Whether Zed should open the project in a window of its own (see ZED_WINDOWS_PY); when its
+// database cannot be read, the window is left to Zed, as before.
+async function zedFresh($: EngineInterface, editor: Editor, root: string): Promise<boolean> {
+  if (editor !== 'zed') return false
+  const ran = await $.process.run(['python3', '-I', '-c', ZED_WINDOWS_PY], { timeoutMs: 5000 }).catch(() => undefined)
+  if (ran?.exitCode !== 0 || ran.isStdoutTruncated) return false
+  try {
+    return !hasOwnWindow(JSON.parse(ran.stdout) as ZedWorkspace[], root)
+  } catch {
+    return false
+  }
+}
+
+async function openFile($: EngineInterface, path: string) {
+  const editor = await chosenEditor($)
+  if (!editor) return $.ui.toast(NO_EDITOR)
+  const root = (await read($, tree)).root || dirname(path)
+  await launch($, openArgv(editor, root, path, undefined, await zedFresh($, editor, root)))
+}
+
+async function openChange($: EngineInterface, path: string) {
+  const editor = await chosenEditor($)
+  if (!editor) return $.ui.toast(NO_EDITOR)
+  const root = (await read($, tree)).root || dirname(path)
+  const line = (await read($, changes)).find(c => c.path === path)?.hunks[0]?.newStart
+  const was = needsBefore(editor) ? await beforeFile($, path) : ''
+  await launch($, diffArgv(editor, root, was, path, line, await zedFresh($, editor, root)))
+}
+
+// The e key: the file or the change under the focus ring.
+async function openFocused($: EngineInterface) {
+  const t = await read($, tree)
+  if (focused && t.nodes[focused]?.kind === 'file') return openFile($, focused)
+  if (focused?.startsWith('change:')) return openChange($, focused.slice(7))
+  $.ui.toast('filetree: e abre o arquivo ou a alteração da linha focada')
+}
+
+// A press runs one of the above off the drawing; what throws is told in a toast.
+function opening($: EngineInterface, run: Promise<void>) {
+  void run.catch((err: unknown) => $.ui.toast(`filetree: ${err instanceof Error ? err.message : String(err)}`))
+}
+
 const stringField = (input: unknown, key: string): string | undefined => {
   const value = (input as Record<string, unknown>)[key]
   return typeof value === 'string' ? value : undefined
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  editorSetting = options.editor ?? 'auto'
+  installed = undefined
+
   // Git's index and HEAD change on every add, commit and checkout, made here or in another
   // terminal: watching them makes the engine raise FileChanged for each.
   on('classic.SessionStart', async ($, e, next) => {
@@ -333,6 +458,11 @@ export const register: Register = on => {
     await update($, changes, list => (Array.isArray(list) ? list.filter(c => typeof c?.path === 'string').map(normalizeChange) : []))
     // A hot reload starts the session again with the same folder: keep what was open.
     if ((await read($, tree)).root !== root) await update($, tree, () => emptyTree(root))
+    // One folder of temporary files per session, kept across a reload.
+    if (!isTempDir((await read($, before)).dir)) {
+      const dir = tempDir((await $.env.get('TMPDIR').catch(() => undefined)) ?? '/tmp', await $.clock.now())
+      await update($, before, () => ({ dir, files: {} }))
+    }
     await refresh($).catch(() => {})
     opensAtStart = true
     return r
@@ -350,6 +480,8 @@ export const register: Register = on => {
     const readPath = tool === 'Read' ? stringField(e, 'file_path') : undefined
     const reading = readPath ? [absolute(readPath, cwd)] : []
     await touch($, reading, 'read', 1)
+    const writing = WRITES.has(tool) ? (stringField(e, 'file_path') ?? stringField(e, 'notebook_path')) : undefined
+    if (writing) await snapshot($, absolute(writing, cwd)).catch(() => {})
     let result: Awaited<ReturnType<typeof next>>
     try {
       result = await next(e)
@@ -394,21 +526,31 @@ export const register: Register = on => {
     return next(e)
   })
 
+  on('session.end', async ($, e, next) => {
+    const { dir } = await read($, before)
+    if (isTempDir(dir)) await $.process.run(['rm', '-rf', dir], { timeoutMs: 5000 }).catch(() => {})
+    return next(e)
+  })
+
   on('turn.complete', async ($, e, next) => {
     schedule($)
     return next(e)
   })
 
   // The person walking the rows with the focus ring: the window keeps a row of the tree
-  // past the ring in view, so the arrows go on through it.
+  // past the ring in view, so the arrows go on through it. The ⧉ icons and the e key's
+  // Button stay out of the ring (no prop does that): it lands on a row instead.
   on('ui.focus', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
     schedule($)
-    const result = await next(e)
+    const element = isIcon(e.element) ? skipIcons(order, focused, e.element as string) : e.element
+    if (isIcon(e.element) && element === undefined) return {}
+    const result = await next(element === e.element ? e : { ...e, element })
+    if (!result.deny) focused = element
     const t = await read($, tree)
-    if (e.origin.kind === 'person' && e.element && e.element in t.nodes) {
+    if (e.origin.kind === 'person' && element && element in t.nodes) {
       await update($, panel, p => (p.manual ? p : { ...p, manual: true }))
       const { rows } = treeRows(t, await read($, activity), await read($, focus))
-      await bringIntoView($, rowOf(rows, t, e.element), rows.length, 1)
+      await bringIntoView($, rowOf(rows, t, element), rows.length, 1)
     }
     return result
   })
@@ -493,6 +635,27 @@ export const register: Register = on => {
         const head = fitRow('', basename(t.root), total.map(part => part.text).join(' '), width)
         const ruleLabel = '─ Alterações '
         const ruleKeys = p.diffsHidden ? 'c: limpar  d: mostrar' : 'c: limpar  d: ocultar'
+        // What the focus ring walks, in drawing order, for the ui.focus hook to step past the icons.
+        order = [
+          ...(p.showTree ? [OPEN_FOCUSED, 'focus'] : []),
+          ...shown.flatMap(row => (row.kind !== 'node' ? [] : row.node.kind === 'file' ? [row.node.path, openKey(row.node.path)] : [row.node.path])),
+          ...(written.length > 0 ? ['clear', 'diffs'] : []),
+          ...(p.diffsHidden ? [] : section.blocks.flatMap(({ change }) => [`change:${change.path}`, diffKey(change.path)])),
+        ]
+        // A chip shown under the pointer right after a row's name, or over its line counts when the
+        // name leaves no room before them.
+        const opener = (key: string, lead: string, fit: { name: string; tail: string }, onPress: () => void) => {
+          const at = lead.length + fit.name.length + 1
+          const fits = at + OPENER.length <= width - (fit.tail ? fit.tail.length + 1 : 0)
+          return (
+            <Box position="absolute" {...(fits ? { left: at } : { right: 0 })} display="none" hover={{ display: 'flex' }}>
+              {!fits && <Text>{' '.repeat(fit.tail ? fit.tail.length + 1 : 1)}</Text>}
+              <Button key={key} plain onPress={onPress}>
+                <Text backgroundColor="suggestion" color="inverseText">{OPENER}</Text>
+              </Button>
+            </Box>
+          )
+        }
 
         return (
           <Box flexDirection="column">
@@ -512,11 +675,17 @@ export const register: Register = on => {
                     {g.behind > 0 && <Text color="error"> ↓{g.behind}</Text>}
                   </Text>
                 </Box>
-                <Button key="focus" plain hotkey="f" onPress={() => void toggleFocus($, showing)}>
-                  <Text color={showing ? 'claude' : undefined} dimColor={!showing}>
-                    {focusLabel}
-                  </Text>
-                </Button>
+                <Box>
+                  <Button key={OPEN_FOCUSED} plain hotkey="e" onPress={() => opening($, openFocused($))}>
+                    <Text dimColor>abrir</Text>
+                  </Button>
+                  <Text> </Text>
+                  <Button key="focus" plain hotkey="f" onPress={() => void toggleFocus($, showing)}>
+                    <Text color={showing ? 'claude' : undefined} dimColor={!showing}>
+                      {focusLabel}
+                    </Text>
+                  </Button>
+                </Box>
               </Box>
             )}
             {shown.map(row => {
@@ -543,7 +712,7 @@ export const register: Register = on => {
                 code && code !== '!' ? CODE_COLOR[code] : isDir ? (g.changed[node.path] ? 'warning' : 'suggestion') : undefined
               const glow = act && marked === 'active' ? shade(act.tone, beatNow) : busy ? shade(busy, beatNow) : undefined
               const glyphColor = !isDir && act ? (marked === 'active' ? glow : baseShade(act.tone)) : undefined
-              return (
+              const line = (
                 <Button key={node.path} plain onPress={() => void press($, node.path)}>
                   <Text wrap="truncate-end">
                     {INDENT.repeat(depth)}
@@ -560,6 +729,13 @@ export const register: Register = on => {
                     {fit.tail && tail.map((part, i) => <Text key={`${node.path}-tail-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
                   </Text>
                 </Button>
+              )
+              if (node.kind !== 'file') return line
+              return (
+                <Box key={`row:${node.path}`} flexDirection="row" width={width}>
+                  {line}
+                  {opener(openKey(node.path), lead, fit, () => opening($, openFile($, node.path)))}
+                </Box>
               )
             })}
             {p.showTree && shown.length < room && written.length > 0 && <Box height={room - shown.length} />}
@@ -592,16 +768,19 @@ export const register: Register = on => {
                 const fit = fitRow(`${glyph} `, name, counts.map(part => part.text).join(' '), width)
                 return (
                   <Box key={`change-${change.path}`} flexDirection="column">
-                    <Button key={`change:${change.path}`} plain onPress={() => void toggleChange($, change.path, isOpen)}>
-                      <Text wrap="truncate-end">
-                        {glyph}{' '}
-                        <Text bold color={marked === 'active' ? shade('write', beatNow) : change.outside ? 'subtle' : undefined}>
-                          {fit.name}
+                    <Box key={`row-change:${change.path}`} flexDirection="row" width={width}>
+                      <Button key={`change:${change.path}`} plain onPress={() => void toggleChange($, change.path, isOpen)}>
+                        <Text wrap="truncate-end">
+                          {glyph}{' '}
+                          <Text bold color={marked === 'active' ? shade('write', beatNow) : change.outside ? 'subtle' : undefined}>
+                            {fit.name}
+                          </Text>
+                          {fit.pad}
+                          {fit.tail && counts.map((part, i) => <Text key={`${change.path}-n-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
                         </Text>
-                        {fit.pad}
-                        {fit.tail && counts.map((part, i) => <Text key={`${change.path}-n-${i}`} color={part.color}>{(i ? ' ' : '') + part.text}</Text>)}
-                      </Text>
-                    </Button>
+                      </Button>
+                      {opener(diffKey(change.path), `${glyph} `, fit, () => opening($, openChange($, change.path)))}
+                    </Box>
                     {source && <Code format="diff" source={source} path={change.path} wrap="truncate-end" />}
                     {rest > 0 && (
                       <Text dimColor wrap="truncate-end">
