@@ -156,7 +156,7 @@ Descartados:
 
 1. Testar o desvio do foco com o painel aberto durante um reload do mod (num teste do spike a navegação travou uma vez e não se repetiu).
 
-## Ícones por tipo de arquivo (fase 8, falta o teste manual)
+## Ícones por tipo de arquivo (fase 8)
 
 Ícones de Nerd Fonts na árvore: um por tipo de arquivo e um para pasta aberta ou fechada. Sem mudar a fonte do terminal.
 
@@ -192,8 +192,8 @@ Descartados:
 
 ### Falta
 
-1. O teste manual no Warp, com `icons: nerd` em `/config` (ver abaixo).
-2. Decidir se vale ícone nos blocos de Alterações e pastas especiais, depois de ver a árvore.
+1. ✓ Teste manual em 2026-10-21, no Warp (Monaspace Krypton NF: substitutos da 2.3) e no terminal do GNOME (com a Symbols: logos da 3.5), numa árvore de teste com 9 níveis, nomes longos, links e 60 arquivos.
+2. Em aberto: ícone nos blocos de Alterações e outras pastas especiais (`node_modules`, `src`, `.github`).
 
 ### Testes
 
@@ -212,7 +212,7 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 5. ✓ **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
 6. ✓ **Fechamento**: README do mod e da raiz, `marketplace.json`, atribuição ao original, teste manual num projeto grande.
 7. ✓ **Abrir no editor**: o botão `⧉ abrir` (no hover; só mouse, sem tecla) abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor").
-8. **Ícones por tipo**: `icons.ts`, opção `icons` em `plugin.json`, árvore com ícone de pasta e de arquivo no lugar de `▾`/`▸` e `●`/`○` (detalhes em "Ícones por tipo de arquivo").
+8. ✓ **Ícones por tipo**: `icons.ts`, opção `icons` em `plugin.json`, árvore com ícone de pasta e de arquivo no lugar de `▾`/`▸` e `●`/`○` (detalhes em "Ícones por tipo de arquivo").
 
 ## Testes
 
