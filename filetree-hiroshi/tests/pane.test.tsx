@@ -547,3 +547,29 @@ test('with icons on, every row still fits a 24 column pane', { options: { icons:
   for (const row of rows) expect(row.length).toBeLessThanOrEqual(24) // an icon is one UTF-16 unit and one column
   await ui.unmount()
 })
+
+test('with icons on, the button that opens a file has an external link icon, else the ⧉', { options: { icons: 'nerd', editor: 'zed' } }, async ($, on) => {
+  engine(on, false)
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  const button = await ui.find({ key: 'abrir:/work/README.md' })
+  expect(button.text).toBe(' \uf08e abrir ')
+  expect(button.text.length).toBe(' ⧉ abrir '.length) // the same room on the row
+  await ui.unmount()
+})
+
+test('a folder with an icon of its own keeps its color, unless git has something to say', { options: { icons: 'nerd' } }, async ($, on) => {
+  engine(on, false, [dir('.claude'), dir('.agents')])
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  const rows = await rowTexts(ui)
+  expect(rows).toContain('\uec82 .claude')
+  expect(rows).toContain('\uec20 .agents')
+  const glyphs = async (glyph: string) => (await ui.findAll({ type: 'Text', text: new RegExp(`^${glyph}$`) }))[0]?.props
+  expect((await glyphs('\uec82'))?.color).toBe('#d4a27f')
+  expect((await glyphs('\uec20'))?.color).toBe('#a074c4')
+  expect((await glyphs('\uf07b'))?.color).toBe('suggestion') // a plain folder still takes its name's
+  await ui.unmount()
+})

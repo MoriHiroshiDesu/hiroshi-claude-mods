@@ -179,7 +179,10 @@ Descartados:
 
 - `hooks/icons.ts` (puro, sem `$`): `iconFor(node, { open })` devolve `{ glyph, color }`. Ordem de busca: nome exato (`package.json`, `Dockerfile`, `.gitignore`, `README.md`, `LICENSE`…), depois extensão (`.ts`, `.tsx`, `.json`, `.md`, `.py`, `.rs`…), depois o ícone genérico de arquivo. Pasta: aberta ou fechada. Link simbólico: ícone próprio.
 - `register.tsx`: onde hoje calcula `glyph` (linha da árvore), chama `iconFor` quando `icons === 'nerd'`; senão, o caminho de hoje.
-- Fora do escopo da primeira versão: ícones nos blocos de Alterações (continuam com `▾`/`▸` do bloco), pastas especiais (`node_modules`, `src`, `.git`), cor própria por linguagem além do que já existe.
+- Ícones próprios (pedido depois do primeiro teste no Warp): IA e Docker. `CLAUDE.md`, `.claude` e `.claude-plugin` com o logo do Claude (`cod-claude`, Codicons da Nerd Fonts 3.5, em tan para não parecer o laranja de escrita do agente); `AGENTS.md`, `.agents`, `.cursor` e `.cursorrules` com o robô; `.codex` com o logo da OpenAI; `GEMINI.md` e `.gemini`; `copilot-instructions.md`. Pasta de IA tem um ícone só (aberta ou fechada) e mantém a cor dele, a não ser que o git tenha algo a dizer sobre ela. Docker: a baleia (`fa-docker`) em `Dockerfile`, `Dockerfile.*`, `docker-compose*.yml`, `compose*.yaml` e `.dockerignore`.
+- O botão de abrir vira ` \uf08e abrir ` (link externo, do mesmo tamanho) com `icons: nerd`; com `off` continua o `⧉`.
+- Os glifos ficam no código como `\uXXXX`: gravados direto, são invisíveis num editor sem Nerd Font.
+- Fora do escopo: ícones nos blocos de Alterações (continuam com `▾`/`▸` do bloco), outras pastas especiais (`node_modules`, `src`, `.github`), cor própria por linguagem além do que já existe.
 
 ### Feito
 

@@ -36,11 +36,11 @@ O `⧉` só aparece com o mouse sobre a linha e fica fora do Tab e das setas.
 
 A opção `icons` do plugin (em `/config`) liga os ícones de Nerd Fonts: um por tipo de arquivo (TypeScript, JSON, Markdown, Dockerfile, `package.json`…) e um de pasta aberta ou fechada, no lugar do `▾`/`▸`. O padrão é `off`, porque o mod não tem como saber se o terminal tem os glifos: sem eles aparecem caixinhas.
 
-Com `nerd`, o ícone do arquivo tem a cor do tipo e o da pasta, a do nome (a do status git). Quando o agente lê ou escreve num arquivo, o ícone dele passa a ter a cor e o brilho da atividade, no lugar do `●`/`○`.
+Com `nerd`, o ícone do arquivo tem a cor do tipo e o da pasta, a do nome (a do status git). Alguns têm ícone próprio: os arquivos e pastas de ferramentas de IA (`CLAUDE.md` e `.claude` com o logo do Claude, `AGENTS.md`, `.agents`, `.cursor`, `.codex`, `GEMINI.md`, `.cursorrules`…) e os do Docker (`Dockerfile`, `Dockerfile.*`, `docker-compose*.yml`, `compose*.yaml`, `.dockerignore`, com a baleia). O botão `abrir` também troca o `⧉` por um ícone de link externo. Quando o agente lê ou escreve num arquivo, o ícone dele passa a ter a cor e o brilho da atividade, no lugar do `●`/`○`.
 
 Os glifos vêm da [Nerd Fonts](https://www.nerdfonts.com). Duas formas de tê-los, sem trocar a fonte do terminal se você não quiser:
 
-- se a fonte do terminal já é uma Nerd Font (o nome termina em `NF` ou `Nerd Font`), nada a instalar;
+- se a fonte do terminal já é uma Nerd Font (o nome termina em `NF` ou `Nerd Font`), nada a instalar. Os logos do Claude e da OpenAI são da Nerd Fonts 3.5; numa fonte mais antiga eles aparecem como caixinha, e a Symbols Nerd Font Mono abaixo resolve;
 - senão, instale a `Symbols Nerd Font Mono` (`NerdFontsSymbolsOnly.zip` na [página de releases](https://github.com/ryanoasis/nerd-fonts/releases/latest)), por exemplo em `~/.local/share/fonts` seguido de `fc-cache -f`, e reinicie o terminal. Funciona em terminais que buscam nas fontes do sistema os glifos que a fonte principal não tem; o Warp faz isso (testado). Use a variante **Mono**: a outra desenha ícones mais largos que uma coluna.
 
 ## Editor

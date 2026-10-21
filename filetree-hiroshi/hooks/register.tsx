@@ -27,6 +27,7 @@ import {
   EDITORS,
   hasOwnWindow,
   OPENER,
+  OPENER_NERD,
   installedFrom,
   isIcon,
   isTempDir,
@@ -693,13 +694,14 @@ export const register: Register = (on, options) => {
         // A chip shown under the pointer right after a row's name, or over its line counts when the
         // name leaves no room before them.
         const opener = (key: string, lead: string, fit: { name: string; tail: string }, onPress: () => void) => {
+          const label = iconsSetting === 'nerd' ? OPENER_NERD : OPENER
           const at = lead.length + fit.name.length + 1
-          const fits = at + OPENER.length <= width - (fit.tail ? fit.tail.length + 1 : 0)
+          const fits = at + label.length <= width - (fit.tail ? fit.tail.length + 1 : 0)
           return (
             <Box position="absolute" {...(fits ? { left: at } : { right: 0 })} display="none" hover={{ display: 'flex' }}>
               {!fits && <Text>{' '.repeat(fit.tail ? fit.tail.length + 1 : 1)}</Text>}
               <Button key={key} plain onPress={onPress}>
-                <Text backgroundColor="suggestion" color="inverseText">{OPENER}</Text>
+                <Text backgroundColor="suggestion" color="inverseText">{label}</Text>
               </Button>
             </Box>
           )
@@ -758,7 +760,9 @@ export const register: Register = (on, options) => {
               const glow = act && marked === 'active' ? shade(act.tone, beatNow) : busy ? shade(busy, beatNow) : undefined
               const actColor = !isDir && act ? (marked === 'active' ? glow : baseShade(act.tone)) : undefined
               // An icon takes the agent's color while it works there, else its type's; a folder's takes its name's.
-              const glyphColor = icon ? (actColor ?? (isDir ? (glow ?? gitColor) : icon.color)) : actColor
+              // A folder with an icon of its own keeps its color, unless git has something to say about it.
+              const folderColor = icon?.color && !code && !g.changed[node.path] ? icon.color : gitColor
+              const glyphColor = icon ? (actColor ?? (isDir ? (glow ?? folderColor) : icon.color)) : actColor
               const dimmed = glow === undefined && (code === '!' || node.kind === 'link' || node.name.startsWith('.'))
               const line = (
                 <Button key={node.path} plain onPress={() => void press($, node.path)}>
