@@ -36,8 +36,11 @@ export type Panel = {
   closedByUser: boolean
   // Whether the pane draws the tree (false while it only has writes outside the session's folder).
   showTree: boolean
-  // The person scrolled the pane this turn: it stops following the agent until the next prompt.
+  // The person scrolled or pressed the pane: it stops following the agent until the next prompt,
+  // or until the agent touches a file once the person has left the pane alone for a while.
   manual: boolean
+  // When the person last moved the tree, on the engine's clock.
+  manualAt: number
   // The first row of the tree the pane shows: with the changes below it, the tree scrolls on its own.
   offset: number
   // The changes section folded to its rule line (the d key).

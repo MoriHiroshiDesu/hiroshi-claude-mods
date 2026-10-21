@@ -70,6 +70,9 @@ const PULSE_MS = 300
 const HEADER_ROWS = 2 // the folder's name and totals, then the branch and the focus toggle
 const SECTION_SHARE = 0.4 // of the pane's rows, at most, for the changes below the tree
 const WHEEL_STEP = 3
+// The person's scroll or press holds the tree this long past their last one; then the agent's
+// next file brings it back, so a long turn does not leave the tree behind for good.
+const HOLD_MS = 8000
 const WRITES = new Set(['Edit', 'Write', 'NotebookEdit'])
 const SHELLS = new Set(['Bash', 'PowerShell'])
 const SEARCHES = new Set(['Grep', 'Glob']) // not on every build: compared by name
@@ -81,7 +84,7 @@ const CODE_TAIL: Partial<Record<GitCode, string>> = { '?': 'U', A: 'A', U: '!' }
 
 // Held by the host, so all of it survives a hot reload of this file.
 const tree = atom({ plugin: 'filetree-hiroshi', key: 'tree' } as const, emptyTree())
-const PANEL: Panel = { closedByUser: false, showTree: false, manual: false, offset: 0, diffsHidden: false, newerIcons: false }
+const PANEL: Panel = { closedByUser: false, showTree: false, manual: false, manualAt: 0, offset: 0, diffsHidden: false, newerIcons: false }
 const panel = atom({ plugin: 'filetree-hiroshi', key: 'panel' } as const, PANEL)
 const git = atom({ plugin: 'filetree-hiroshi', key: 'git' } as const, noGit())
 const activity = atom({ plugin: 'filetree-hiroshi', key: 'activity' } as const, {} as Record<string, Act>)
@@ -265,7 +268,13 @@ async function touch($: EngineInterface, paths: readonly string[], tone: Tone, l
   beat($)
 }
 
-// Opens the folders down to each path and, unless the person scrolled this turn, brings the last into view.
+// The person moved the tree: it stops following the agent for a while (HOLD_MS).
+async function hold($: EngineInterface, moved: (p: Panel) => Partial<Panel> = () => ({})) {
+  const now = await $.clock.now()
+  await update($, panel, p => ({ ...p, ...moved(p), manual: true, manualAt: now }))
+}
+
+// Opens the folders down to each path and, unless the person moved the tree a moment ago, brings the last into view.
 async function reveal($: EngineInterface, paths: readonly string[]) {
   const t = await read($, tree)
   const within = paths.filter(path => inside(t.root, path) && path !== t.root)
@@ -273,6 +282,8 @@ async function reveal($: EngineInterface, paths: readonly string[]) {
   const dirs = [...new Set(within.flatMap(path => ancestors(t.root, path)))]
   for (const dir of [t.root, ...dirs]) if (dir === t.root || needsListing(await read($, tree), dir)) await list($, dir)
   await update($, tree, cur => expand(cur, dirs))
+  const now = await $.clock.now()
+  await update($, panel, p => (p.manual && now - p.manualAt >= HOLD_MS ? { ...p, manual: false } : p))
   await engage($)
   if ((await read($, panel)).manual) return
   const cur = await read($, tree)
@@ -316,12 +327,12 @@ async function shellReads($: EngineInterface, command: string, cwd: string): Pro
   return found
 }
 
-// A press is the person's: the tree stops following the agent until the next prompt.
+// A press is the person's: the tree stops following the agent for a while.
 async function press($: EngineInterface, path: string) {
   const t = await read($, tree)
   const node = t.nodes[path]
   if (!node) return
-  await update($, panel, p => (p.manual ? p : { ...p, manual: true, offset: drawnFrom }))
+  await hold($, p => (p.manual ? {} : { offset: drawnFrom }))
   if (node.kind !== 'dir') {
     await update($, tree, cur => ({ ...cur, cursor: path }))
     return
@@ -610,7 +621,7 @@ export const register: Register = (on, options) => {
     if (!result.deny) focused = element
     const t = await read($, tree)
     if (e.origin.kind === 'person' && element && element in t.nodes) {
-      await update($, panel, p => (p.manual ? p : { ...p, manual: true }))
+      await hold($)
       const { rows } = treeRows(t, await read($, activity), await read($, focus))
       await bringIntoView($, rowOf(rows, t, element), rows.length, 1)
     }
@@ -623,7 +634,7 @@ export const register: Register = (on, options) => {
     const overTree = !e.pointer || (e.pointer.row >= HEADER_ROWS && e.pointer.row < HEADER_ROWS + room)
     if (e.by !== 0 && overTree) {
       const step = Math.sign(e.by) * Math.max(WHEEL_STEP, Math.abs(e.by))
-      await update($, panel, p => ({ ...p, manual: true, offset: Math.max(0, drawnFrom + step) }))
+      await hold($, () => ({ offset: Math.max(0, drawnFrom + step) }))
     }
     return next(e)
   })
