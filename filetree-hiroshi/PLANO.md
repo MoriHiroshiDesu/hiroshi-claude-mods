@@ -166,7 +166,7 @@ Cada fase termina carregável, com testes passando (`claude plugin validate`, `t
 4. ✓ **Modo foco**: projeção em `focus.ts`, regra do auto, tecla `f`, indicador `◉ foco` no cabeçalho.
 5. ✓ **Diffs**: `diff.ts`, a seção, teclas `d`, `enter` e `c`, divisão da altura.
 6. ✓ **Fechamento**: README do mod e da raiz, `marketplace.json`, atribuição ao original, teste manual num projeto grande.
-7. ✓ **Abrir no editor**: o botão `⧉ abrir` (no hover) ou a tecla `e` abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor").
+7. ✓ **Abrir no editor**: o botão `⧉ abrir` (no hover; só mouse, sem tecla) abre o arquivo ou o diff no Zed ou no VS Code (detalhes em "Abrir no editor").
 
 ## Testes
 

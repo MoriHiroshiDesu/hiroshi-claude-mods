@@ -397,7 +397,7 @@ const tab = ($: any, element: string) => $.ui.focus({ component: 'Pane', request
 const editorRuns = (runs: string[][]) => runs.filter(argv => argv[0] === 'zed' || argv[0] === 'code')
 
 test('a file\'s row has a ⧉ that opens it in the editor, with the project folder', { options: { editor: 'zed' } }, async ($, on) => {
-  const { runs } = engine(on)
+  const { runs, toasts } = engine(on)
   await start($)
   await filetree($)
   const ui = await mount($)
@@ -407,6 +407,7 @@ test('a file\'s row has a ⧉ that opens it in the editor, with the project fold
   expect(await rowTexts(ui)).toContain('  README.md')
   await ui.press({ key: 'abrir:/work/README.md' })
   expect(editorRuns(runs)).toEqual([['zed', '/work', '/work/README.md']])
+  expect(toasts).toContain('filetree: abrindo README.md no Zed…') // feedback for the press
   await ui.unmount()
 })
 
@@ -445,8 +446,8 @@ test('with no editor found a press says so', async ($, on) => {
   await ui.unmount()
 })
 
-test('the focus ring steps past the icons, and e opens the row it is on', { options: { editor: 'zed' } }, async ($, on) => {
-  const { runs, focusedOn, toasts } = engine(on)
+test('the focus ring steps past the icons, and no key opens the row it is on', { options: { editor: 'zed' } }, async ($, on) => {
+  const { runs, focusedOn } = engine(on)
   await start($)
   await filetree($)
   const ui = await mount($)
@@ -459,14 +460,9 @@ test('the focus ring steps past the icons, and e opens the row it is on', { opti
   // Tab from the last row: round to the first that is no icon
   await tab($, 'abrir:/work/README.md')
   expect(focusedOn.at(-1)).toBe('focus')
-  await tab($, '/work/README.md')
-  await ui.press({ key: 'abrir-focado' })
-  expect(editorRuns(runs)).toEqual([['zed', '/work', '/work/README.md']])
-  // on a folder, e only says what it does
-  await tab($, '/work/src')
-  await ui.press({ key: 'abrir-focado' })
-  expect(editorRuns(runs)).toHaveLength(1)
-  expect(toasts.at(-1)).toMatch(/e abre/)
+  // no key opens a file: only the ⧉ does
+  expect(await ui.find({ key: 'abrir-focado' })).toBeUndefined()
+  expect(editorRuns(runs)).toEqual([])
   await ui.unmount()
 })
 

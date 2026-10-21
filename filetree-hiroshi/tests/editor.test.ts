@@ -10,7 +10,6 @@ import {
   installedFrom,
   isIcon,
   isTempDir,
-  OPEN_FOCUSED,
   openArgv,
   openKey,
   skipIcons,
@@ -81,10 +80,10 @@ test('the temporary folder is the session’s own, and only such a folder is rem
 })
 
 // Keys in drawing order: the header, two files with their ⧉, a folder, a change with its ⧉.
-const ORDER = [OPEN_FOCUSED, 'focus', '/w/a.ts', openKey('/w/a.ts'), '/w/src', '/w/b.ts', openKey('/w/b.ts'), 'clear', 'change:/w/a.ts', diffKey('/w/a.ts')]
+const ORDER = ['focus', '/w/a.ts', openKey('/w/a.ts'), '/w/src', '/w/b.ts', openKey('/w/b.ts'), 'clear', 'change:/w/a.ts', diffKey('/w/a.ts')]
 
 test('the icons are kept out of the focus ring', () => {
-  expect(ORDER.filter(isIcon)).toEqual([OPEN_FOCUSED, openKey('/w/a.ts'), openKey('/w/b.ts'), diffKey('/w/a.ts')])
+  expect(ORDER.filter(isIcon)).toEqual([openKey('/w/a.ts'), openKey('/w/b.ts'), diffKey('/w/a.ts')])
   // Tab from a row lands on its own ⧉: on to the next row
   expect(skipIcons(ORDER, '/w/a.ts', openKey('/w/a.ts'))).toBe('/w/src')
   // Shift+Tab from the row below lands on the ⧉ above: its row
@@ -94,8 +93,5 @@ test('the icons are kept out of the focus ring', () => {
   expect(skipIcons(ORDER, '/w/b.ts', diffKey('/w/a.ts'))).toBe('change:/w/a.ts')
   // Tab from the last row: round to the first that is no icon
   expect(skipIcons(ORDER, 'change:/w/a.ts', diffKey('/w/a.ts'))).toBe('focus')
-  // the e key's Button has no row: past it in the direction moved
-  expect(skipIcons(ORDER, 'focus', OPEN_FOCUSED)).toBe('change:/w/a.ts')
-  expect(skipIcons(ORDER, undefined, OPEN_FOCUSED)).toBe('focus')
   expect(skipIcons(ORDER, undefined, 'abrir:/nowhere')).toBeUndefined()
 })

@@ -11,7 +11,7 @@ Inspirado no [claude-code-filetree](https://github.com/data-goblin/claude-code-f
 - **Onde o agente está:** `●` pulsando em azul quando lê e em laranja quando escreve, `○` até o próximo prompt. A pasta do arquivo se abre e a árvore rola até ele.
 - **Modo foco:** quando os arquivos ativos estão longe demais na árvore para caberem juntos, ela mostra só o caminho até eles e resume o resto em `⋯ N arquivos`. `f` fixa o foco ligado ou desligado; de novo, volta ao automático.
 - **Alterações:** abaixo da árvore, cada arquivo escrito na sessão com `+N -N` e os trechos alterados. O mais recente fica aberto; clique abre e fecha os outros. `d` recolhe a seção e `c` a limpa.
-- **Abrir no editor:** com o mouse sobre a linha de um arquivo aparece um botão `⧉ abrir` logo depois do nome (na ponta direita, sobre a contagem, quando o nome é comprido). Clicar nele abre o arquivo no Zed ou no VS Code; numa alteração, abre o diff. Se o projeto já está aberto no editor, o arquivo vira uma aba na janela dele; se não, o editor abre o projeto com o arquivo em foco. `e` faz o mesmo com a linha focada.
+- **Abrir no editor:** com o mouse sobre a linha de um arquivo aparece um botão `⧉ abrir` logo depois do nome (na ponta direita, sobre a contagem, quando o nome é comprido). Clicar nele abre o arquivo no Zed ou no VS Code; numa alteração, abre o diff. Se o projeto já está aberto no editor, o arquivo vira uma aba na janela dele; se não, o editor abre o projeto com o arquivo em foco. Ao clicar, um aviso (toast) no Claude Code confirma que o arquivo está sendo aberto. Só o mouse abre: não há atalho de teclado.
 
 ## Quando abre
 

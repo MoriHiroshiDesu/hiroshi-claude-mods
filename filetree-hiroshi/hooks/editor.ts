@@ -9,10 +9,9 @@ export const EDITORS: readonly Editor[] = ['zed', 'code']
 export const OPENER = ' ⧉ abrir '
 
 // The keys of the Buttons the focus ring passes over: a row's ⧉ in the tree and in the
-// changes section, and the e key's own Button.
+// changes section.
 export const openKey = (path: string) => `abrir:${path}`
 export const diffKey = (path: string) => `abrir-diff:${path}`
-export const OPEN_FOCUSED = 'abrir-focado'
 
 export const isIcon = (key: string | undefined) => key?.startsWith('abrir') === true
 

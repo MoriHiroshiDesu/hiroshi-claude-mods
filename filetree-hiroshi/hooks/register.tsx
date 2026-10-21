@@ -12,7 +12,7 @@
 //   (d folds it, c clears it). The tree scrolls in a window of its own, so the section stays
 //   in view: the pane's body is drawn to fit, and the wheel and the focus ring move the window.
 //   A ⧉ abrir chip after a file's name, shown under the pointer, opens it in Zed or VS Code; on
-//   a change, its diff (in Zed, the file: see editor.ts). The e key opens the focused row's.
+//   a change, its diff (in Zed, the file: see editor.ts).
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Register, Timer } from 'claude-code'
 
@@ -31,7 +31,6 @@ import {
   isIcon,
   isTempDir,
   needsBefore,
-  OPEN_FOCUSED,
   openArgv,
   openKey,
   skipIcons,
@@ -339,6 +338,7 @@ function tailOf(lines: readonly [number, number] | undefined, code: GitCode | un
   return parts
 }
 
+const EDITOR_NAME: Record<Editor, string> = { zed: 'Zed', code: 'VS Code' }
 const NO_EDITOR = 'filetree: nenhum editor encontrado (zed ou code no PATH); escolha um nas opções do plugin'
 
 // The agent's first write to a file this session: a copy of the file as it was, the before
@@ -406,6 +406,7 @@ async function openFile($: EngineInterface, path: string) {
   const editor = await chosenEditor($)
   if (!editor) return $.ui.toast(NO_EDITOR)
   const root = (await read($, tree)).root || dirname(path)
+  $.ui.toast(`filetree: abrindo ${basename(path)} no ${EDITOR_NAME[editor]}…`)
   await launch($, openArgv(editor, root, path, undefined, await zedFresh($, editor, root)))
 }
 
@@ -414,16 +415,9 @@ async function openChange($: EngineInterface, path: string) {
   if (!editor) return $.ui.toast(NO_EDITOR)
   const root = (await read($, tree)).root || dirname(path)
   const line = (await read($, changes)).find(c => c.path === path)?.hunks[0]?.newStart
+  $.ui.toast(`filetree: abrindo o diff de ${basename(path)} no ${EDITOR_NAME[editor]}…`)
   const was = needsBefore(editor) ? await beforeFile($, path) : ''
   await launch($, diffArgv(editor, root, was, path, line, await zedFresh($, editor, root)))
-}
-
-// The e key: the file or the change under the focus ring.
-async function openFocused($: EngineInterface) {
-  const t = await read($, tree)
-  if (focused && t.nodes[focused]?.kind === 'file') return openFile($, focused)
-  if (focused?.startsWith('change:')) return openChange($, focused.slice(7))
-  $.ui.toast('filetree: e abre o arquivo ou a alteração da linha focada')
 }
 
 // A press runs one of the above off the drawing; what throws is told in a toast.
@@ -686,7 +680,7 @@ export const register: Register = (on, options) => {
         const ruleKeys = p.diffsHidden ? 'c: limpar  d: mostrar' : 'c: limpar  d: ocultar'
         // What the focus ring walks, in drawing order, for the ui.focus hook to step past the icons.
         order = [
-          ...(p.showTree ? [OPEN_FOCUSED, 'focus'] : []),
+          ...(p.showTree ? ['focus'] : []),
           ...shown.flatMap(row => (row.kind !== 'node' ? [] : row.node.kind === 'file' ? [row.node.path, openKey(row.node.path)] : [row.node.path])),
           ...(written.length > 0 ? ['clear', 'diffs'] : []),
           ...(p.diffsHidden ? [] : section.blocks.flatMap(({ change }) => [`change:${change.path}`, diffKey(change.path)])),
@@ -725,10 +719,6 @@ export const register: Register = (on, options) => {
                   </Text>
                 </Box>
                 <Box>
-                  <Button key={OPEN_FOCUSED} plain hotkey="e" onPress={() => opening($, openFocused($))}>
-                    <Text dimColor>abrir</Text>
-                  </Button>
-                  <Text> </Text>
                   <Button key="focus" plain hotkey="f" onPress={() => void toggleFocus($, showing)}>
                     <Text color={showing ? 'claude' : undefined} dimColor={!showing}>
                       {focusLabel}
