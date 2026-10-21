@@ -85,6 +85,7 @@ declare module 'claude-code' {
       changes: Change[]
       focus: Focus
       before: Before
+      bound: string
     }
   }
 }

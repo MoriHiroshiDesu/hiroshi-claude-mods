@@ -87,6 +87,8 @@ const pulse = atom({ plugin: 'filetree-hiroshi', key: 'pulse' } as const, 0)
 const changes = atom({ plugin: 'filetree-hiroshi', key: 'changes' } as const, [] as Change[])
 const focus = atom({ plugin: 'filetree-hiroshi', key: 'focus' } as const, { mode: 'auto', engaged: false } as Focus)
 const before = atom({ plugin: 'filetree-hiroshi', key: 'before' } as const, { dir: '', files: {} } as Before)
+// The id of the session the state above belongs to: a /clear goes on under another.
+const bound = atom({ plugin: 'filetree-hiroshi', key: 'bound' } as const, '')
 
 // Read again at every session.start, which a reload raises too.
 let home = ''
@@ -429,6 +431,60 @@ function opening($: EngineInterface, run: Promise<void>) {
   void run.catch((err: unknown) => $.ui.toast(`filetree: ${err instanceof Error ? err.message : String(err)}`))
 }
 
+// Brings the state to the session it runs in. A /clear raises no session.start: the process
+// goes on under a new session id, with the old tree, changes and temporary folder (removed by
+// its session.end) still in the host. A new session starts from nothing; a reload, which keeps
+// the id, keeps what was open.
+async function bind($: EngineInterface, cwd: string): Promise<boolean> {
+  const id = await $.session.id().catch(() => '')
+  const isNew = id !== '' && (await read($, bound)) !== id
+  const root = posix(cwd)
+  if (isNew) {
+    await update($, panel, () => PANEL)
+    await update($, activity, () => ({}))
+    await update($, changes, () => [])
+    await update($, focus, () => ({ mode: 'auto', engaged: false }))
+    await update($, tree, () => emptyTree(root))
+    await update($, before, () => ({ dir: '', files: {} }))
+    await update($, git, () => noGit())
+  }
+  // The host keeps the state across a reload: what an older version of the mod wrote
+  // is brought to today's shape before anything draws it.
+  await update($, panel, p => ({ ...PANEL, ...p }))
+  await update($, changes, list => (Array.isArray(list) ? list.filter(c => typeof c?.path === 'string').map(normalizeChange) : []))
+  // A hot reload starts the session again with the same folder: keep what was open.
+  if ((await read($, tree)).root !== root) await update($, tree, () => emptyTree(root))
+  // One folder of temporary files per session, kept across a reload.
+  if (!isTempDir((await read($, before)).dir)) {
+    const dir = tempDir((await $.env.get('TMPDIR').catch(() => undefined)) ?? '/tmp', await $.clock.now())
+    await update($, before, () => ({ dir, files: {} }))
+  }
+  await update($, bound, () => id)
+  seenId = id
+  await refresh($).catch(() => {})
+  return isNew
+}
+
+// The session the state was last bound to, and the binding in progress.
+let seenId = ''
+let binding: Promise<boolean> | undefined
+
+// Binds when the session is not the one the state belongs to (after a /clear), and opens the
+// pane as a new session does, once a drawing has said the terminal docks panes.
+async function ensure($: EngineInterface, opens = true) {
+  const id = await $.session.id().catch(() => '')
+  if (!id || id === seenId) return
+  binding ??= bind($, (await $.session.cwd().catch(() => '')) || (await read($, tree)).root).finally(() => {
+    binding = undefined
+  })
+  if (!(await binding) || !opens) return
+  opensAtStart = true
+  if (isFullscreen === true) {
+    opensAtStart = false
+    await autoOpen($, true)
+  }
+}
+
 const stringField = (input: unknown, key: string): string | undefined => {
   const value = (input as Record<string, unknown>)[key]
   return typeof value === 'string' ? value : undefined
@@ -451,19 +507,7 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     await $.command.register({ name: 'filetree', description: 'Abre ou fecha a árvore de arquivos da sessão' }).catch(() => {}) // a name Claude Code already has is refused: start anyway
     home = posix((await $.env.get('HOME').catch(() => undefined)) ?? '')
-    const root = posix(e.cwd)
-    // The host keeps the state across a reload: what an older version of the mod wrote
-    // is brought to today's shape before anything draws it.
-    await update($, panel, p => ({ ...PANEL, ...p }))
-    await update($, changes, list => (Array.isArray(list) ? list.filter(c => typeof c?.path === 'string').map(normalizeChange) : []))
-    // A hot reload starts the session again with the same folder: keep what was open.
-    if ((await read($, tree)).root !== root) await update($, tree, () => emptyTree(root))
-    // One folder of temporary files per session, kept across a reload.
-    if (!isTempDir((await read($, before)).dir)) {
-      const dir = tempDir((await $.env.get('TMPDIR').catch(() => undefined)) ?? '/tmp', await $.clock.now())
-      await update($, before, () => ({ dir, files: {} }))
-    }
-    await refresh($).catch(() => {})
+    await bind($, e.cwd)
     opensAtStart = true
     return r
   })
@@ -475,6 +519,7 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', async ($, e, next) => {
+    await ensure($).catch(() => {})
     const tool = String(e.tool)
     const cwd = posix((await $.session.cwd().catch(() => '')) || (await read($, tree)).root)
     const readPath = tool === 'Read' ? stringField(e, 'file_path') : undefined
@@ -518,6 +563,7 @@ export const register: Register = (on, options) => {
   // A new turn: the person may have edited files in another program, last turn's ○ go,
   // and the tree follows the agent again.
   on('prompt.submit', async ($, e, next) => {
+    await ensure($).catch(() => {})
     const now = await $.clock.now()
     await update($, activity, acts => Object.fromEntries(Object.entries(acts).filter(([, act]) => markOf(act, now) === 'active')))
     await update($, panel, p => (p.manual ? { ...p, manual: false } : p))
@@ -571,6 +617,8 @@ export const register: Register = (on, options) => {
   // which may not write.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.viewport?.isFullscreen !== undefined) isFullscreen = e.viewport.isFullscreen
+    // A drawing may not write: a session the state is not bound to is bound off it.
+    if ((await $.session.id().catch(() => '')) !== seenId) $.clock.after(0, () => void ensure($).catch(() => {}))
     if (opensAtStart && isFullscreen === true) {
       opensAtStart = false
       $.clock.after(0, () => void autoOpen($, true).catch(() => {}))
@@ -580,6 +628,7 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'filetree' }, async ($, e) => {
     isFullscreen = e.presentation?.isFullscreen ?? isFullscreen
+    await ensure($, false).catch(() => {}) // the person asked for the pane: it is not opened for them first
     if ((await $.ui.panes()).some(pane => pane.id === PANE)) {
       // The close is the mod's own (origin plugin), but the person asked for it.
       await update($, panel, p => ({ ...p, closedByUser: true }))

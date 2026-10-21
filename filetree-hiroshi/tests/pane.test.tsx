@@ -42,7 +42,9 @@ function engine(on: any, repo = true, extra: FsEntry[] = []) {
   const panes = { open: false }
   on('session.start', (_$: any, e: any) => ({ cwd: e.cwd }))
   on('session.end', () => ({ sessionId: 's1' }))
+  const session = { id: 's1' }
   on('session.cwd', () => ({ value: '/work' }))
+  on('session.id', () => ({ value: session.id }))
   on('command.register', () => ({ value: undefined }))
   on('classic.FileChanged', () => ({}))
   on('fs.list', (_$: any, e: any) => {
@@ -75,7 +77,7 @@ function engine(on: any, repo = true, extra: FsEntry[] = []) {
         ? { result: { filePath: e.file_path, structuredPatch: [{ oldStart: 3, oldLines: 2, newStart: 3, newLines: 2, lines: [' keep', `-${e.old_string}`, `+${e.new_string}`] }] }, text: 'ok' }
         : { result: {}, text: 'ok' },
   )
-  return { clock, listed, panes, statuses, opened, runs, toasts, focusedOn, files }
+  return { clock, listed, panes, statuses, opened, runs, toasts, focusedOn, files, session }
 }
 
 const start = ($: any) => $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
@@ -138,6 +140,27 @@ test('a fullscreen session opens the pane at its start, with the tree', async ($
   expect(await rowTexts(ui)).toEqual(['▸ dist', '▸ src', '  notes.md', '  README.md'])
   await ui.unmount()
   await above.unmount()
+})
+
+// A /clear raises no session.start: the process goes on under a new session id.
+test('a /clear starts the tree and opens the pane again, though the person closed it before', async ($, on) => {
+  const { clock, opened, panes, session } = engine(on, false)
+  await start($)
+  const above = await band($, true)
+  await clock.advance(0)
+  expect(opened).toEqual([PANE])
+  await filetree($) // the person closes it
+  expect(panes.open).toBe(false)
+  session.id = 's2'
+  await above.unmount()
+  const again = await band($, true)
+  await clock.advance(0)
+  await clock.advance(0)
+  expect(opened).toEqual([PANE, PANE])
+  const ui = await mount($)
+  expect(await rowTexts(ui)).toEqual(['▸ dist', '▸ src', '  notes.md', '  README.md'])
+  await ui.unmount()
+  await again.unmount()
 })
 
 test('on the main screen the pane waits for /filetree', async ($, on) => {
