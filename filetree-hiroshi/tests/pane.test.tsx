@@ -395,6 +395,28 @@ test('the tree scrolls in a window of its own that follows the agent, the change
   await ui.unmount()
 })
 
+test('a scroll holds the tree a moment; then the agent\'s next file brings it back, focus held on', async ($, on) => {
+  const { clock } = engine(on, true, many)
+  on('ui.scroll', () => ({}))
+  await start($)
+  await filetree($)
+  const ui = await mount($, 14)
+  await $.tool.call(edit('/work/a19.ts') as any)
+  await ui.press({ key: 'focus' })
+  for (const f of many) await $.tool.call(edit(`/work/${f.name}`) as any)
+  expect((await rowTexts(ui)).some((row: string) => row.includes('a00'))).toBe(false)
+  // the wheel over the tree: the agent's files right after it leave the window where it is
+  await $.ui.scroll({ component: 'Pane', requestId: PANE, by: 1, offset: 0, bodyRows: 14, contentRows: 14, origin: { kind: 'person' } } as any)
+  const held = await rowTexts(ui)
+  await $.tool.call(edit('/work/a00.ts') as any)
+  expect(await rowTexts(ui)).toEqual(held)
+  // the person leaves the pane alone: the agent's next file comes into view, in a folder it had not opened yet
+  await clock.advance(9000)
+  await $.tool.call({ tool: 'Read', tool_use_id: 't2', file_path: '/work/src/lib/util.ts' } as any)
+  expect(await rowTexts(ui)).toEqual(expect.arrayContaining(['▾ src/lib', '  ● util.ts']))
+  await ui.unmount()
+})
+
 // The person's Tab, arrows or click moving the pane's focus ring onto `element`.
 const tab = ($: any, element: string) => $.ui.focus({ component: 'Pane', requestId: PANE, element, origin: { kind: 'person' } } as any)
 

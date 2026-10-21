@@ -24,7 +24,7 @@ O painel de diff do próprio Claude Code (`/diff`) também abre sozinho quando o
 | Tecla | O que faz |
 |-------|-----------|
 | Enter ou clique | abre ou fecha a pasta, ou o bloco de alterações |
-| roda do mouse | rola a árvore; ela para de seguir o agente até o próximo prompt |
+| roda do mouse | rola a árvore; ela para de seguir o agente até o próximo prompt, ou até ele tocar outro arquivo depois de uns segundos sem você mexer no painel |
 | `f` | foco: fixa ligado ou desligado, e de novo volta ao automático |
 | `d` | recolhe ou mostra as alterações |
 | `c` | limpa as alterações |
