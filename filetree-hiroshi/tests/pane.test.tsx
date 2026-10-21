@@ -29,9 +29,11 @@ function gitOut(argv: readonly string[]) {
 }
 
 // Stands for the engine beneath the mod.
-function engine(on: any, repo = true, extra: FsEntry[] = []) {
+function engine(on: any, repo = true, extra: FsEntry[] = [], env: Record<string, string> = {}) {
   const clock = mock.clock(on)
-  mock.env(on, { HOME: '/home/u' })
+  mock.env(on, { HOME: '/home/u', ...env })
+  // What fontconfig answers: the families that have every glyph asked for, by pattern.
+  const fonts: Record<string, string> = {}
   const listed: string[] = []
   const statuses: number[] = []
   const opened: string[] = []
@@ -53,7 +55,10 @@ function engine(on: any, repo = true, extra: FsEntry[] = []) {
   })
   on('fs.exists', (_$: any, e: any) => ({ value: e.path in DISK || Object.entries(DISK).some(([d, es]) => es.some(f => `${d}/${f.name}` === e.path)) }))
   on('process.run', (_$: any, e: any) => (runs.push([...e.argv]), e.argv.includes('status') && statuses.push(1), {
-    value: { ...(repo ? gitOut(e.argv) : { exitCode: 128, stdout: '' }), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+    value: {
+      ...(e.argv[0] === 'fc-list' ? { exitCode: 0, stdout: fonts[e.argv[1]] ?? '' } : repo ? gitOut(e.argv) : { exitCode: 128, stdout: '' }),
+      stderr: '', isStdoutTruncated: false, isStderrTruncated: false,
+    },
   }))
   on('ui.open', (_$: any, e: any) => ((panes.open = true), opened.push(e.id), { value: { isPlaced: true } }))
   on('ui.panes', () => ({ value: panes.open ? [{ id: PANE, title: 'filetree', isShown: true, isFocused: false, isPlaced: true }] : [] }))
@@ -77,7 +82,7 @@ function engine(on: any, repo = true, extra: FsEntry[] = []) {
         ? { result: { filePath: e.file_path, structuredPatch: [{ oldStart: 3, oldLines: 2, newStart: 3, newLines: 2, lines: [' keep', `-${e.old_string}`, `+${e.new_string}`] }] }, text: 'ok' }
         : { result: {}, text: 'ok' },
   )
-  return { clock, listed, panes, statuses, opened, runs, toasts, focusedOn, files, session }
+  return { clock, listed, panes, statuses, opened, runs, toasts, focusedOn, files, session, fonts }
 }
 
 const start = ($: any) => $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
@@ -571,5 +576,63 @@ test('a folder with an icon of its own keeps its color, unless git has something
   expect((await glyphs('\uf069'))?.color).toBe('#d4a27f')
   expect((await glyphs('\ueb08'))?.color).toBe('#a074c4')
   expect((await glyphs('\uf07b'))?.color).toBe('suggestion') // a plain folder still takes its name's
+  await ui.unmount()
+})
+
+const CHARSET = ':charset=ec82 ec81 ec20 ec10 ec1e'
+const WARP = '/home/u/.config/warp-terminal/settings.toml'
+
+test('with icons nerd, a terminal with a font that has them draws the newer AI logos', { options: { icons: 'nerd' } }, async ($, on) => {
+  const { fonts } = engine(on, false, [dir('.claude')])
+  fonts[CHARSET] = 'Symbols Nerd Font Mono\n'
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  expect(await rowTexts(ui)).toContain('\uec82 .claude')
+  await ui.unmount()
+})
+
+test('in Warp only its own font counts: a fallback font with the logos is not enough', { options: { icons: 'nerd' } }, async ($, on) => {
+  const { fonts, files, runs } = engine(on, false, [dir('.claude')], { TERM_PROGRAM: 'WarpTerminal' })
+  files[WARP] = '[appearance.text]\nfont_name = "Monaspace Krypton NF"\n'
+  fonts[CHARSET] = 'Symbols Nerd Font Mono\n' // installed, but Warp would blank the screen asking it
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  expect(await rowTexts(ui)).toContain('\uf069 .claude')
+  expect(runs.filter(argv => argv[0] === 'fc-list')).toEqual([['fc-list', `Monaspace Krypton NF${CHARSET}`, 'family']])
+  await ui.unmount()
+})
+
+test('in Warp with a font that has the logos, they are drawn', { options: { icons: 'nerd' } }, async ($, on) => {
+  const { fonts, files } = engine(on, false, [dir('.claude')], { TERM_PROGRAM: 'WarpTerminal' })
+  files[WARP] = '[appearance.text]\nfont_name = "Monaspace Krypton NF"\n'
+  fonts[`Monaspace Krypton NF${CHARSET}`] = 'Monaspace Krypton NF\n'
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  expect(await rowTexts(ui)).toContain('\uec82 .claude')
+  await ui.unmount()
+})
+
+test('icons nerd-2.3 never asks fontconfig and keeps the stand-ins', { options: { icons: 'nerd-2.3' } }, async ($, on) => {
+  const { fonts, runs } = engine(on, false, [dir('.claude')])
+  fonts[CHARSET] = 'Symbols Nerd Font Mono\n'
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  expect(await rowTexts(ui)).toContain('\uf069 .claude')
+  expect(runs.some(argv => argv[0] === 'fc-list')).toBe(false)
+  await ui.unmount()
+})
+
+test('tmux inside Warp is still Warp', { options: { icons: 'nerd' } }, async ($, on) => {
+  const { fonts, runs } = engine(on, false, [dir('.claude')], { TERM_PROGRAM: 'tmux', WARP_CLIENT_VERSION: 'v0.2026.10.15' })
+  fonts[CHARSET] = 'Symbols Nerd Font Mono\n'
+  await start($)
+  await filetree($)
+  const ui = await mount($)
+  expect(await rowTexts(ui)).toContain('\uf069 .claude') // no settings read: nothing asked, the stand-ins
+  expect(runs.some(argv => argv[0] === 'fc-list')).toBe(false)
   await ui.unmount()
 })

@@ -38,7 +38,17 @@ A opção `icons` do plugin (em `/config`) liga os ícones de Nerd Fonts: um por
 
 Com `nerd`, o ícone do arquivo tem a cor do tipo e o da pasta, a do nome (a do status git). Alguns têm ícone próprio: os arquivos e pastas de ferramentas de IA (`CLAUDE.md` e `.claude` com um asterisco que lembra o logo do Claude, `AGENTS.md`, `.agents`, `.cursor` e `.cursorrules` com um robô, `.codex`, `GEMINI.md`…) e os do Docker (`Dockerfile`, `Dockerfile.*`, `docker-compose*.yml`, `compose*.yaml`, `.dockerignore`, com a baleia). O botão `abrir` também troca o `⧉` por um ícone de link externo. Quando o agente lê ou escreve num arquivo, o ícone dele passa a ter a cor e o brilho da atividade, no lugar do `●`/`○`.
 
-Os glifos vêm da [Nerd Fonts](https://www.nerdfonts.com), e o mod só usa os que já existiam na versão 2.3. O jeito seguro de tê-los é a fonte do terminal ser uma Nerd Font (o nome termina em `NF` ou `Nerd Font`), de qualquer versão a partir da 2.3.
+Os glifos vêm da [Nerd Fonts](https://www.nerdfonts.com). O jeito seguro de tê-los é a fonte do terminal ser uma Nerd Font (o nome termina em `NF` ou `Nerd Font`), de qualquer versão a partir da 2.3.
+
+Os valores de `icons`:
+
+| Valor | O que faz |
+|---|---|
+| `off` (padrão) | a árvore com `▾`/`▸` e `●`/`○`, sem ícones |
+| `nerd` | os ícones, e os logos do Claude, da OpenAI, do Gemini e do Copilot e o robô dos agentes (da Nerd Fonts 3.5) quando o terminal consegue desenhá-los; senão, o asterisco, o cérebro, a varinha e outro robô, que a 2.3 já tinha |
+| `nerd-2.3` | os ícones, sempre só com os glifos da 2.3 |
+
+No `nerd`, o mod pergunta ao fontconfig no início de cada sessão (`fc-list`, cerca de 20 ms) se há uma fonte com os logos onde o terminal vai procurar. No Warp (detectado por `TERM_PROGRAM` ou `WARP_CLIENT_VERSION`, inclusive dentro de um `tmux`), só conta a fonte do terminal em `~/.config/warp-terminal/settings.toml`. Nos outros terminais conta qualquer fonte instalada, porque eles buscam nas outras fontes o glifo que falta na principal. Sem `fc-list` (macOS, Windows) ficam os glifos da 2.3. Use o `nerd-2.3` num terminal que não busca em outras fontes e cuja fonte é anterior à 3.5: lá os logos aparecem como caixinha.
 
 Sem trocar a fonte do terminal, dá para instalar a `Symbols Nerd Font Mono` (`NerdFontsSymbolsOnly.zip` na [página de releases](https://github.com/ryanoasis/nerd-fonts/releases/latest)), por exemplo em `~/.local/share/fonts` seguido de `fc-cache -f`, e reiniciar o terminal. Isso só funciona em terminais que buscam nas fontes do sistema os glifos que a fonte principal não tem. O terminal do GNOME busca. **O Warp não**: ele não consegue carregar essa fonte (`failed to load font 'SymbolsNFM'` no `~/.local/state/warp-terminal/warp.log`) e, quando precisa de um glifo que só ela tem, a tela inteira some. No Warp, use uma Nerd Font como fonte do terminal. Na Symbols, use a variante **Mono**: a outra desenha ícones mais largos que uma coluna.
 

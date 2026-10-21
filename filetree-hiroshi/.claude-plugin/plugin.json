@@ -21,11 +21,12 @@
     "icons": {
       "type": "string",
       "title": "Ícones",
-      "description": "Ícones de Nerd Fonts por tipo de arquivo e para pastas: off (padrão) ou nerd. Precisa de uma Nerd Font na fonte do terminal ou da Symbols Nerd Font Mono instalada; sem elas aparecem caixinhas",
+      "description": "Ícones de Nerd Fonts por tipo de arquivo e para pastas: off (padrão), nerd (usa os logos de IA da Nerd Fonts 3.5 quando o terminal consegue desenhá-los) ou nerd-2.3 (só os glifos da 2.3). Precisa de uma Nerd Font no terminal; sem ela aparecem caixinhas",
       "default": "off",
       "options": [
         "off",
-        "nerd"
+        "nerd",
+        "nerd-2.3"
       ]
     }
   }

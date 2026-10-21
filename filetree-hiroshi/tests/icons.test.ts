@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { iconFor, iconMode } from '../hooks/icons'
+import { canDrawNewer, iconFor, iconMode, isWarp, newerGlyphsProbe, warpFont } from '../hooks/icons'
 
 const glyph = (name: string) => iconFor(name, 'file').glyph
 
@@ -114,7 +114,52 @@ test('every glyph is one Nerd Fonts 2.3 already had: a terminal may not fall bac
   }
 })
 
-test('only the value nerd turns the icons on', () => {
+test('only nerd and nerd-2.3 turn the icons on', () => {
   expect(iconMode('nerd')).toBe('nerd')
-  for (const setting of ['off', undefined, '', 'NERD', true, 1, null]) expect(iconMode(setting)).toBe('off')
+  expect(iconMode('nerd-2.3')).toBe('nerd-2.3')
+  for (const setting of ['off', undefined, '', 'NERD', 'nerd-3', true, 1, null]) expect(iconMode(setting)).toBe('off')
+})
+
+test('when the terminal can, the AI files and folders draw the Nerd Fonts 3.5 logos', () => {
+  const newer = (name: string, kind: 'file' | 'dir' = 'file') => iconFor(name, kind, false, true).glyph
+  expect(newer('CLAUDE.md')).toBe('\uec82')
+  expect(newer('.claude', 'dir')).toBe('\uec82')
+  expect(newer('.codex', 'dir')).toBe('\uec81')
+  expect(newer('AGENTS.md')).toBe('\uec20')
+  expect(newer('.gemini', 'dir')).toBe('\uec10')
+  expect(newer('copilot-instructions.md')).toBe('\uec1e')
+  // the color stays, and the rest of the table does not change
+  expect(iconFor('CLAUDE.md', 'file', false, true).color).toBe(iconFor('CLAUDE.md', 'file').color)
+  for (const name of ['a.ts', 'Dockerfile', '.env', 'README.md']) expect(newer(name)).toBe(glyph(name))
+  expect(iconFor('src', 'dir', true, true).glyph).toBe(iconFor('src', 'dir', true).glyph)
+  // without the go-ahead, the 2.3 stand-ins
+  expect(glyph('CLAUDE.md')).toBe('\uf069')
+})
+
+const CHARSET = ':charset=ec82 ec81 ec20 ec10 ec1e'
+
+test('outside Warp, fontconfig is asked for any installed font with the logos', () => {
+  expect(newerGlyphsProbe(false, undefined)).toEqual(['fc-list', CHARSET, 'family'])
+  expect(isWarp(undefined, undefined)).toBe(false)
+  expect(isWarp('vscode', undefined)).toBe(false)
+  expect(isWarp('WarpTerminal', undefined)).toBe(true)
+  expect(isWarp('tmux', 'v0.2026.10.15')).toBe(true) // tmux inside Warp
+})
+
+test('in Warp, only the font of its settings counts, its name escaped for fontconfig', () => {
+  const settings = '[appearance]\nfont_name = "Not This"\n\n[appearance.text]\nmatch_ai_font = false\nfont_name = "Monaspace Krypton NF"\nai_font_name = "Monaspace Neon NF"\n'
+  expect(warpFont(settings)).toBe('Monaspace Krypton NF')
+  expect(newerGlyphsProbe(true, settings)).toEqual(['fc-list', `Monaspace Krypton NF${CHARSET}`, 'family'])
+  expect(newerGlyphsProbe(true, '[appearance.text]\nfont_name = "Fira-Code: NF, x"\n')?.[1]).toBe(`Fira\\-Code\\: NF\\, x${CHARSET}`)
+  // no settings, or no font in them (Warp's own default): nothing to ask, the stand-ins
+  expect(newerGlyphsProbe(true, undefined)).toBeUndefined()
+  expect(newerGlyphsProbe(true, '[appearance.text]\nfont_size = 13.0\n')).toBeUndefined()
+  expect(warpFont('[appearance.text]\nfont_name = ""\n')).toBeUndefined()
+})
+
+test('the logos are drawn only when fontconfig names a font', () => {
+  expect(canDrawNewer({ exitCode: 0, stdout: 'Symbols Nerd Font Mono\n' })).toBe(true)
+  expect(canDrawNewer({ exitCode: 0, stdout: '\n' })).toBe(false)
+  expect(canDrawNewer({ exitCode: 1, stdout: 'x' })).toBe(false)
+  expect(canDrawNewer(undefined)).toBe(false)
 })

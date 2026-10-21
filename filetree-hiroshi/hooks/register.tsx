@@ -43,7 +43,7 @@ import { moreLabel, project, RELEASE_MS, spreadOut } from './focus'
 import type { FocusRow } from './focus'
 import { codeAt, load, locate, noGit } from './git'
 import type { Run } from './git'
-import { iconFor, iconMode } from './icons'
+import { canDrawNewer, iconFor, iconMode, isWarp, newerGlyphsProbe } from './icons'
 import type { IconMode } from './icons'
 import {
   ancestors,
@@ -81,7 +81,7 @@ const CODE_TAIL: Partial<Record<GitCode, string>> = { '?': 'U', A: 'A', U: '!' }
 
 // Held by the host, so all of it survives a hot reload of this file.
 const tree = atom({ plugin: 'filetree-hiroshi', key: 'tree' } as const, emptyTree())
-const PANEL: Panel = { closedByUser: false, showTree: false, manual: false, offset: 0, diffsHidden: false }
+const PANEL: Panel = { closedByUser: false, showTree: false, manual: false, offset: 0, diffsHidden: false, newerIcons: false }
 const panel = atom({ plugin: 'filetree-hiroshi', key: 'panel' } as const, PANEL)
 const git = atom({ plugin: 'filetree-hiroshi', key: 'git' } as const, noGit())
 const activity = atom({ plugin: 'filetree-hiroshi', key: 'activity' } as const, {} as Record<string, Act>)
@@ -104,7 +104,7 @@ let drawnFrom = 0
 // The editor option (`auto`, `zed` or `code`), the editors on the PATH once looked up, the
 // element the focus ring is on, and the pane's focusable keys in drawing order.
 let editorSetting: unknown = 'auto'
-// The icons option: `nerd` draws a Nerd Font icon where a row had its ▾ ▸ ● ○ glyph.
+// The icons option: `nerd` and `nerd-2.3` draw a Nerd Font icon where a row had its ▾ ▸ ● ○ glyph.
 let iconsSetting: IconMode = 'off'
 let installed: Editor[] | undefined
 let focused: string | undefined
@@ -430,6 +430,20 @@ function opening($: EngineInterface, run: Promise<void>) {
   void run.catch((err: unknown) => $.ui.toast(`filetree: ${err instanceof Error ? err.message : String(err)}`))
 }
 
+// Whether the terminal can draw the Nerd Fonts 3.5 logos, asked once per session start (fc-list,
+// some 20 ms). Warp's font comes from its settings; anything that fails keeps the 2.3 stand-ins.
+async function probeIcons($: EngineInterface) {
+  let newerIcons = false
+  if (iconsSetting === 'nerd') {
+    const term = (await $.env.get('TERM_PROGRAM').catch(() => undefined)) ?? undefined
+    const inWarp = isWarp(term, (await $.env.get('WARP_CLIENT_VERSION').catch(() => undefined)) ?? undefined)
+    const settings = inWarp && home ? await $.fs.read(`${home}/.config/warp-terminal/settings.toml`).catch(() => undefined) : undefined
+    const argv = newerGlyphsProbe(inWarp, settings)
+    newerIcons = argv ? canDrawNewer(await $.process.run(argv, { timeoutMs: 5000 }).catch(() => undefined)) : false
+  }
+  await update($, panel, p => (p.newerIcons === newerIcons ? p : { ...p, newerIcons }))
+}
+
 // Brings the state to the session it runs in. A /clear raises no session.start: the process
 // goes on under a new session id, with the old tree, changes and temporary folder (removed by
 // its session.end) still in the host. A new session starts from nothing; a reload, which keeps
@@ -439,7 +453,8 @@ async function bind($: EngineInterface, cwd: string): Promise<boolean> {
   const isNew = id !== '' && (await read($, bound)) !== id
   const root = posix(cwd)
   if (isNew) {
-    await update($, panel, () => PANEL)
+    // What the terminal can draw outlives a /clear: only the session's start asks it again.
+    await update($, panel, p => ({ ...PANEL, newerIcons: p?.newerIcons === true }))
     await update($, activity, () => ({}))
     await update($, changes, () => [])
     await update($, focus, () => ({ mode: 'auto', engaged: false }))
@@ -508,6 +523,7 @@ export const register: Register = (on, options) => {
     await $.command.register({ name: 'filetree', description: 'Abre ou fecha a árvore de arquivos da sessão' }).catch(() => {}) // a name Claude Code already has is refused: start anyway
     home = posix((await $.env.get('HOME').catch(() => undefined)) ?? '')
     await bind($, e.cwd)
+    await probeIcons($)
     opensAtStart = true
     return r
   })
@@ -694,7 +710,7 @@ export const register: Register = (on, options) => {
         // A chip shown under the pointer right after a row's name, or over its line counts when the
         // name leaves no room before them.
         const opener = (key: string, lead: string, fit: { name: string; tail: string }, onPress: () => void) => {
-          const label = iconsSetting === 'nerd' ? OPENER_NERD : OPENER
+          const label = iconsSetting !== 'off' ? OPENER_NERD : OPENER
           const at = lead.length + fit.name.length + 1
           const fits = at + label.length <= width - (fit.tail ? fit.tail.length + 1 : 0)
           return (
@@ -750,7 +766,7 @@ export const register: Register = (on, options) => {
               const marked = markOf(act, now)
               // A collapsed folder with the agent inside pulses too.
               const busy = isDir && !open ? busyDirs.get(node.path) : undefined
-              const icon = iconsSetting === 'nerd' ? iconFor(node.name, node.kind, open) : undefined
+              const icon = iconsSetting !== 'off' ? iconFor(node.name, node.kind, open, iconsSetting === 'nerd' && p.newerIcons) : undefined
               const glyph = icon ? icon.glyph : isDir ? (open ? '▾' : '▸') : marked === 'active' ? '●' : marked === 'recent' ? '○' : ' '
               const lead = `${INDENT.repeat(depth)}${glyph} `
               const tail = tailOf(g.lines[node.path], code)

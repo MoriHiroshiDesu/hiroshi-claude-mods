@@ -42,6 +42,8 @@ export type Panel = {
   offset: number
   // The changes section folded to its rule line (the d key).
   diffsHidden: boolean
+  // The session's start found the terminal can draw the Nerd Fonts 3.5 logos (icons: nerd).
+  newerIcons: boolean
 }
 
 export type Tone = 'read' | 'write'
