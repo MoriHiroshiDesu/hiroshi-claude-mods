@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { GitInfo } from '../types'
 
-import { clip, linesColumn, load, parseCommit, parseStatus, placeColumn, rowSegments, treeColumn } from './register'
+import { clip, linesColumn, load, parseColumns, parseCommit, parseStatus, placeColumn, rowSegments, treeColumn } from './register'
 
 const FS = '\x1f'
 
@@ -101,4 +101,35 @@ test('load tells a linked worktree from the main checkout and is null outside a 
   expect((await load(run('/r/.git/worktrees/feat-x')))?.worktree).toBe('feat-x')
   expect((await load(run('/r/.git')))?.worktree).toBeUndefined()
   expect(await load(async () => ({ exitCode: 128, stdout: '' }))).toBeNull()
+})
+
+test('parseColumns keeps the order given, drops unknown names and repeats', () => {
+  expect(parseColumns('commit, branch')).toEqual(['commit', 'branch'])
+  expect(parseColumns('Branch,nope,branch,LINES')).toEqual(['branch', 'lines'])
+})
+
+test('parseColumns falls back to all four columns when nothing valid is left', () => {
+  const all = ['branch', 'changes', 'commit', 'lines']
+  expect(parseColumns(undefined)).toEqual(all)
+  expect(parseColumns('')).toEqual(all)
+  expect(parseColumns('nope')).toEqual(all)
+})
+
+test('the row shows only the chosen columns, in the chosen order', () => {
+  const row = { ...base, modified: 1, commit }
+  expect(text(rowSegments(row, 200, ['branch', 'lines']))).toBe('⎇ main │ +12 -3')
+  expect(text(rowSegments(row, 200, ['commit', 'branch']))).toBe('abc1234 feat: x · 2 hours ago │ ⎇ main')
+  expect(text(rowSegments(row, 200, ['changes']))).toBe('~1')
+})
+
+test('a chosen subject still gives way to the width', () => {
+  const long = { ...base, commit: { ...commit, subject: 'x'.repeat(200) } }
+  const out = text(rowSegments(long, 60, ['branch', 'commit']))
+  expect(out.length).toBeLessThanOrEqual(60)
+  expect(out.endsWith('… · 2 hours ago')).toBe(true)
+})
+
+test('with no commit, "sem commits" stands for the commit column and lines vanish', () => {
+  expect(text(rowSegments(base, 80, ['branch', 'commit', 'lines']))).toBe('⎇ main │ sem commits')
+  expect(text(rowSegments(base, 80, ['lines']))).toBe('')
 })

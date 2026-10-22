@@ -1,9 +1,17 @@
 {
   "name": "git-band",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Faixa acima do prompt com a branch ou worktree atual e uma prévia do último commit",
   "types": "./types/index.d.ts",
   "author": {
     "name": "Hiroshi"
+  },
+  "userConfig": {
+    "columns": {
+      "type": "string",
+      "title": "Colunas",
+      "description": "Quais colunas a faixa mostra, e em que ordem, separadas por vírgula: branch, changes, commit, lines. Ex.: branch,commit. Nomes desconhecidos são ignorados; vazio mostra todas",
+      "default": "branch,changes,commit,lines"
+    }
   }
 }

@@ -109,18 +109,40 @@ export function linesColumn(commit: Commit): Seg[] {
   ]
 }
 
-// The whole row for `columns` cells: the commit's subject takes what the rest leaves.
-export function rowSegments(git: GitInfo, columns: number): Seg[] {
-  const place = placeColumn(git)
-  const tree = treeColumn(git)
+// The columns the row can hold, in the order the `columns` option lists them.
+export const COLUMN_IDS = ['branch', 'changes', 'commit', 'lines'] as const
+export type ColumnId = (typeof COLUMN_IDS)[number]
+
+// The `columns` option, a comma-separated list such as "branch,commit". Unknown names and
+// repeats are dropped; with nothing valid left the row keeps all four, as it was.
+export function parseColumns(setting: unknown): ColumnId[] {
+  if (typeof setting !== 'string') return [...COLUMN_IDS]
+  const wanted = setting
+    .split(',')
+    .map(name => name.trim().toLowerCase())
+    .filter((name): name is ColumnId => (COLUMN_IDS as readonly string[]).includes(name))
+  const unique = wanted.filter((name, i) => wanted.indexOf(name) === i)
+  return unique.length === 0 ? [...COLUMN_IDS] : unique
+}
+
+// The whole row for `columns` cells, with the columns the person chose: the commit's
+// subject takes what the rest leaves. Without a commit, "sem commits" takes the commit
+// column's place and the lines column has nothing to show.
+export function rowSegments(git: GitInfo, columns: number, layout: readonly ColumnId[] = COLUMN_IDS): Seg[] {
   const commit = git.commit
-  if (commit === undefined) return [...place, SEP, ...tree, SEP, { text: 'sem commits', dim: true }]
-  const lines = linesColumn(commit)
-  const hash: Seg = { text: `${commit.hash} `, color: 'yellow' }
-  const when: Seg = { text: ` · ${commit.when}`, dim: true }
-  const others = width([...place, SEP, ...tree, SEP, hash, when, SEP, ...lines])
-  const subject: Seg = { text: clip(commit.subject, Math.max(8, columns - others - 1)) }
-  return [...place, SEP, ...tree, SEP, hash, subject, when, SEP, ...lines]
+  const hash: Seg = { text: commit === undefined ? '' : `${commit.hash} `, color: 'yellow' }
+  const when: Seg = { text: commit === undefined ? '' : ` · ${commit.when}`, dim: true }
+  // Where the subject goes, once the other columns have said how much room is left.
+  const slot: Seg = { text: '' }
+  const cells = layout.flatMap((id): Seg[][] => {
+    if (id === 'branch') return [placeColumn(git)]
+    if (id === 'changes') return [treeColumn(git)]
+    if (id === 'lines') return commit === undefined ? [] : [linesColumn(commit)]
+    return [commit === undefined ? [{ text: 'sem commits', dim: true }] : [hash, slot, when]]
+  })
+  const others = width(cells.flat()) + SEP.text.length * Math.max(0, cells.length - 1)
+  const subject: Seg = { text: commit === undefined ? '' : clip(commit.subject, Math.max(8, columns - others - 1)) }
+  return cells.flatMap((cell, i) => [...(i > 0 ? [SEP] : []), ...cell.map(seg => (seg === slot ? subject : seg))])
 }
 
 type Run = (argv: string[]) => Promise<{ exitCode: number; stdout: string }>
@@ -159,7 +181,9 @@ async function refresh($: EngineInterface) {
 // event here, so the row is also read on a timer.
 const POLL_MS = 4000
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const layout = parseColumns(options.columns)
+
   // While the model works its turn ends in `turn.complete` and each Bash call already
   // refreshes, so the timer stays idle then; it also skips a tick while a read is running.
   let isWorking = false
@@ -229,7 +253,7 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {rest}
         <Text wrap="truncate-end">
-          {rowSegments(git, e.props.bodyColumns).map(seg => (
+          {rowSegments(git, e.props.bodyColumns, layout).map(seg => (
             <Text color={seg.color} bold={seg.bold} dimColor={seg.dim}>
               {seg.text}
             </Text>
