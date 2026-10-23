@@ -1,9 +1,9 @@
-// Fork of hamzafer/claude-code-mods context-bar (MIT). Change: refresh after a /compact reads the new window (session.append, doors compaction, command and notice).
+// Fork of hamzafer/claude-code-mods context-bar (MIT). Changes: refresh after a /compact reads the new window (session.append, doors compaction, command and notice); the bar grows while a turn runs (session.measure), not only when it ends.
 // Context Bar: what is filling my context window?
 //   Above the prompt, the window as one stacked bar, a color per category as /context
 //   draws them (system prompt, tools, MCP tools, memory files, skills, messages, free),
 //   with a legend of tokens and shares and where auto-compaction runs. It refreshes after
-//   each turn. /context-bar shows or hides it, and the choice is kept across sessions.
+//   each turn and while one runs. /context-bar shows or hides it, and the choice is kept across sessions.
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
@@ -25,6 +25,7 @@ const isHidden = atom({ plugin: 'context-bar-hiroshi', key: 'isHidden' } as cons
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
+    measured = undefined
     await $.command.register({ name: 'context-bar', description: 'Show or hide the context window bar above the prompt' }).catch(() => {}) // a name Claude Code already has is refused: start anyway
     const hidden = (await $.store.get('isHidden').catch(() => undefined)) === true
     await update($, isHidden, () => hidden)
@@ -35,6 +36,19 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
     if (!e.agentId) await refresh($).catch(() => {}) // a subagent's turn fills its own window, not this one
+    return r
+  })
+
+  // The engine measures the session while a turn runs, not only when it ends: the bar follows the
+  // window as the task fills it. A measure that leaves the token count where the bar has it, or
+  // one that reports none, does not ask for the breakdown.
+  on('session.measure', async ($, e, next) => {
+    const r = await next(e)
+    const total = e.context?.tokens
+    if (typeof total === 'number' && total !== measured) {
+      measured = total
+      void refreshLive($)
+    }
     return r
   })
 
@@ -102,6 +116,27 @@ export const register: Register = on => {
       </Box>
     )
   })
+}
+
+// Measures arrive in bursts, and the breakdown takes a moment: one refresh runs at a time, and the
+// measures that come in meanwhile fold into a single one after it.
+let running = false
+let again = false
+let measured: number | undefined // the token count of the last measure that asked for a refresh
+async function refreshLive($: EngineInterface) {
+  if (running) {
+    again = true
+    return
+  }
+  running = true
+  try {
+    do {
+      again = false
+      await refresh($).catch(() => {})
+    } while (again)
+  } finally {
+    running = false
+  }
 }
 
 // Asks the engine for /context's breakdown, estimated locally (no token-count calls).
