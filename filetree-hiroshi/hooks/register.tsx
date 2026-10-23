@@ -43,7 +43,7 @@ import { moreLabel, project, RELEASE_MS, spreadOut } from './focus'
 import type { FocusRow } from './focus'
 import { codeAt, load, locate, noGit } from './git'
 import type { Run } from './git'
-import { canDrawNewer, iconFor, iconMode, isWarp, newerGlyphsProbe } from './icons'
+import { canDrawNewer, focusLabel, iconFor, iconMode, isWarp, newerGlyphsProbe } from './icons'
 import type { IconMode } from './icons'
 import {
   ancestors,
@@ -705,7 +705,7 @@ export const register: Register = (on, options) => {
         const from = windowFor(p.offset, target ? rowOf(rows, t, target) : -1, room, rows.length, Math.floor(room / 3))
         drawnFrom = from
         const shown = rows.slice(from, from + room)
-        const focusLabel = `${showing ? '◉' : '○'} foco${f.mode === 'on' ? ' fixo' : f.mode === 'off' ? ' desligado' : ''}`
+        const focusText = focusLabel(f.mode, showing, iconsSetting !== 'off')
 
         const total = tailOf(g.lines[t.root], undefined)
         const head = fitRow('', basename(t.root), total.map(part => part.text).join(' '), width)
@@ -755,7 +755,7 @@ export const register: Register = (on, options) => {
                 <Box>
                   <Button key="focus" plain hotkey="f" onPress={() => void toggleFocus($, showing)}>
                     <Text color={showing ? 'claude' : undefined} dimColor={!showing}>
-                      {focusLabel}
+                      {focusText}
                     </Text>
                   </Button>
                 </Box>

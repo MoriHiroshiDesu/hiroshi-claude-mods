@@ -323,7 +323,7 @@ test('two active files too far apart for the pane turn focus on, and it lets go 
   expect(await rowTexts(ui)).toEqual(['▾ src/lib', '  ○ util.ts', '○ README.md'])
   await clock.advance(3300)
   expect(await inFocus(ui)).toBe(false)
-  expect(await ui.find({ type: 'Text', text: /○ foco/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^○ completa$/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -340,7 +340,7 @@ test('f holds focus on or off, and pressed again goes back to auto', async ($, o
   // again: back to auto
   await ui.press({ key: 'focus' })
   expect(await inFocus(ui)).toBe(false)
-  expect(await ui.find({ type: 'Text', text: /^○ foco$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^○ completa$/ })).toBeDefined()
   // auto and on: f holds it off, so two far files no longer cut the tree down
   await $.tool.call(edit('/work/src/lib/util.ts') as any)
   expect(await rowTexts(ui)).toEqual(['▾ src/lib', '  ● util.ts', '● README.md'])
@@ -656,5 +656,24 @@ test('tmux inside Warp is still Warp', { options: { icons: 'nerd' } }, async ($,
   const ui = await mount($)
   expect(await rowTexts(ui)).toContain('\uf069 .claude') // no settings read: nothing asked, the stand-ins
   expect(runs.some(argv => argv[0] === 'fc-list')).toBe(false)
+  await ui.unmount()
+})
+
+test('with icons on, the f button draws a crosshairs for focus and a sitemap for the whole tree', { options: { icons: 'nerd' } }, async ($, on) => {
+  engine(on, true, many)
+  await start($)
+  await filetree($)
+  const ui = await mount($, 14)
+  const button = async () => (await ui.find({ key: 'focus' })).text
+  expect(await button()).toBe('\uf0e8 completa')
+  await $.tool.call(edit('/work/README.md') as any)
+  await ui.press({ key: 'focus' })
+  expect(await button()).toBe('\uf05b foco fixo')
+  await ui.press({ key: 'focus' })
+  // two far files turn focus on by themselves; held off, the sitemap comes back
+  await $.tool.call(edit('/work/src/lib/util.ts') as any)
+  expect(await button()).toBe('\uf05b foco')
+  await ui.press({ key: 'focus' })
+  expect(await button()).toBe('\uf0e8 foco desligado')
   await ui.unmount()
 })
