@@ -23,6 +23,11 @@
       "name": "filetree-hiroshi",
       "source": "./filetree-hiroshi",
       "description": "Árvore de arquivos da sessão num painel lateral: status git, onde o agente lê e escreve, modo foco e os diffs de cada arquivo escrito"
+    },
+    {
+      "name": "footer-inline",
+      "source": "./footer-inline",
+      "description": "Leva o status do tool-diet para a mesma linha do modo (auto mode on), em vez de uma linha só dele"
     }
   ],
   "metadata": {
