@@ -37,6 +37,7 @@ function engine(on: any, repo = true, extra: FsEntry[] = [], env: Record<string,
   const listed: string[] = []
   const statuses: number[] = []
   const opened: string[] = []
+  const openArgs: any[] = []
   const runs: string[][] = []
   const toasts: string[] = []
   const focusedOn: (string | undefined)[] = []
@@ -60,7 +61,7 @@ function engine(on: any, repo = true, extra: FsEntry[] = [], env: Record<string,
       stderr: '', isStdoutTruncated: false, isStderrTruncated: false,
     },
   }))
-  on('ui.open', (_$: any, e: any) => ((panes.open = true), opened.push(e.id), { value: { isPlaced: true } }))
+  on('ui.open', (_$: any, e: any) => ((panes.open = true), opened.push(e.id), openArgs.push(e), { value: { isPlaced: true } }))
   on('ui.panes', () => ({ value: panes.open ? [{ id: PANE, title: 'filetree', isShown: true, isFocused: false, isPlaced: true }] : [] }))
   on('ui.close', () => ((panes.open = false), { value: undefined }))
   on('ui.toast', (_$: any, e: any) => (toasts.push(e.text), { value: undefined }))
@@ -82,7 +83,7 @@ function engine(on: any, repo = true, extra: FsEntry[] = [], env: Record<string,
         ? { result: { filePath: e.file_path, structuredPatch: [{ oldStart: 3, oldLines: 2, newStart: 3, newLines: 2, lines: [' keep', `-${e.old_string}`, `+${e.new_string}`] }] }, text: 'ok' }
         : { result: {}, text: 'ok' },
   )
-  return { clock, listed, panes, statuses, opened, runs, toasts, focusedOn, files, session, fonts }
+  return { clock, listed, panes, statuses, opened, openArgs, runs, toasts, focusedOn, files, session, fonts }
 }
 
 const start = ($: any) => $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
@@ -105,6 +106,27 @@ test('the pane lists the session folder, folders first, without .git', async ($,
   expect(await ui.find({ type: 'Text', text: 'work' })).toBeDefined()
   expect(await rowTexts(ui)).toEqual(['▸ dist', '▸ src', '  notes.md', '  README.md'])
   await ui.unmount()
+})
+
+test('with no width set, the dock is not asked for a size', async ($, on) => {
+  const { openArgs } = engine(on, false)
+  await start($)
+  await filetree($)
+  expect(openArgs[0].columns).toBeUndefined()
+})
+
+test('a width of 52 asks the dock for 52 columns', { options: { width: 52 } }, async ($, on) => {
+  const { openArgs } = engine(on, false)
+  await start($)
+  await filetree($)
+  expect(openArgs.map((a: any) => a.columns)).toEqual([52])
+})
+
+test('a width of 0 leaves the dock to the engine', { options: { width: 0 } }, async ($, on) => {
+  const { openArgs } = engine(on, false)
+  await start($)
+  await filetree($)
+  expect(openArgs[0].columns).toBeUndefined()
 })
 
 test('pressing a folder reads it once and opens and closes it', async ($, on) => {

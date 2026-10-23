@@ -1,6 +1,6 @@
 {
   "name": "filetree-hiroshi",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Árvore de arquivos da sessão num painel lateral, mostrando onde o agente lê e escreve e os diffs que ele faz. Inspirado no claude-code-filetree (data-goblin, MIT).",
   "types": "./types/index.d.ts",
   "author": {
@@ -28,6 +28,12 @@
         "nerd",
         "nerd-2.3"
       ]
+    },
+    "width": {
+      "type": "number",
+      "title": "Largura do painel",
+      "description": "Colunas do painel quando ele fica ao lado da transcrição (tela cheia). 0 (padrão) deixa o Claude Code escolher. A largura que você arrasta no painel vale mais que esta opção",
+      "default": 0
     }
   }
 }

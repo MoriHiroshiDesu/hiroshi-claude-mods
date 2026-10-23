@@ -54,6 +54,10 @@ No `nerd`, o mod pergunta ao fontconfig no início de cada sessão (`fc-list`, c
 
 Sem trocar a fonte do terminal, dá para instalar a `Symbols Nerd Font Mono` (`NerdFontsSymbolsOnly.zip` na [página de releases](https://github.com/ryanoasis/nerd-fonts/releases/latest)), por exemplo em `~/.local/share/fonts` seguido de `fc-cache -f`, e reiniciar o terminal. Isso só funciona em terminais que buscam nas fontes do sistema os glifos que a fonte principal não tem. O terminal do GNOME busca. **O Warp não**: ele não consegue carregar essa fonte (`failed to load font 'SymbolsNFM'` no `~/.local/state/warp-terminal/warp.log`) e, quando precisa de um glifo que só ela tem, a tela inteira some. No Warp, use uma Nerd Font como fonte do terminal. Na Symbols, use a variante **Mono**: a outra desenha ícones mais largos que uma coluna.
 
+## Largura
+
+A opção `width` do plugin (em `/config`) pede ao Claude Code quantas colunas o painel deve ter ao lado da transcrição. O padrão, `0`, deixa a escolha com ele; uma largura arrastada no painel vale mais que a opção. Detalhes em [CONFIGURACAO.md](CONFIGURACAO.md).
+
 ## Editor
 
 A opção `editor` do plugin (em `/config`) escolhe onde abrir: `auto` (padrão), `zed` ou `code`. No `auto`, vale o editor em cujo terminal a sessão roda (o terminal integrado do VS Code ou do Zed); fora deles, o primeiro instalado, nessa ordem. O `$EDITOR` não entra na conta.

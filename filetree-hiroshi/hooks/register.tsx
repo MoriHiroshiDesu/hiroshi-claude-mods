@@ -109,6 +109,8 @@ let drawnFrom = 0
 let editorSetting: unknown = 'auto'
 // The icons option: `nerd` and `nerd-2.3` draw a Nerd Font icon where a row had its ▾ ▸ ● ○ glyph.
 let iconsSetting: IconMode = 'off'
+// The width option: the body columns the docked pane asks for, or undefined to leave it to the engine.
+let widthSetting: number | undefined
 let installed: Editor[] | undefined
 let focused: string | undefined
 let order: string[] = []
@@ -298,7 +300,7 @@ async function autoOpen($: EngineInterface, hasInside: boolean) {
   if (hasInside) await update($, panel, p => (p.showTree ? p : { ...p, showTree: true }))
   if ((await read($, panel)).closedByUser || isFullscreen === false) return
   if ((await $.ui.panes()).some(pane => pane.id === PANE)) return
-  await $.ui.open({ id: PANE, title: TITLE })
+  await $.ui.open(paneArgs())
 }
 
 async function wrote($: EngineInterface, paths: readonly string[], hunks: readonly Hunk[] = []) {
@@ -510,6 +512,13 @@ async function ensure($: EngineInterface, opens = true) {
   }
 }
 
+// A width the person set (a whole number of columns) is asked of the dock; 0, a fraction or
+// anything else leaves the engine's own share. The width the person dragged still wins.
+const paneWidth = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined
+
+const paneArgs = () => ({ id: PANE, title: TITLE, ...(widthSetting ? { columns: widthSetting } : {}) })
+
 const stringField = (input: unknown, key: string): string | undefined => {
   const value = (input as Record<string, unknown>)[key]
   return typeof value === 'string' ? value : undefined
@@ -518,6 +527,7 @@ const stringField = (input: unknown, key: string): string | undefined => {
 export const register: Register = (on, options) => {
   editorSetting = options.editor ?? 'auto'
   iconsSetting = iconMode(options.icons)
+  widthSetting = paneWidth(options.width)
   installed = undefined
 
   // Git's index and HEAD change on every add, commit and checkout, made here or in another
@@ -663,7 +673,7 @@ export const register: Register = (on, options) => {
       return { text: 'filetree fechado.' }
     }
     await update($, panel, p => ({ ...p, showTree: true, closedByUser: false }))
-    const opened = await $.ui.open({ id: PANE, title: TITLE })
+    const opened = await $.ui.open(paneArgs())
     return { text: opened.isPlaced ? 'filetree aberto.' : `filetree aberto, aguardando espaço: ${opened.reason}` }
   })
 
