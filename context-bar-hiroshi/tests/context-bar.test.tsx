@@ -112,6 +112,32 @@ describe('context-bar', () => {
     expect(asked.length).toBe(2)
   })
 
+  test('follows the window while a turn runs: a measure with a new token count refreshes, a repeat does not', async ($, on) => {
+    const { asked } = engine(on)
+    on('session.measure', (_$: any, e: any) => ({ changed: e.changed }))
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
+    await settle()
+    const measure = (tokens?: number) =>
+      $.session.measure({ context: { window: 1_000_000, tokens, percent: 20 }, rateLimits: [], changed: ['context'] } as any)
+    await measure(205_000)
+    await settle()
+    expect(asked.length).toBe(2)
+    await measure(205_000)
+    await settle()
+    expect(asked.length).toBe(2) // same count: nothing to redraw
+    await measure(210_000)
+    await measure(215_000)
+    await settle()
+    expect(asked.length).toBeLessThanOrEqual(4) // a burst folds into at most one refresh behind the running one
+    expect(asked.length).toBeGreaterThan(2)
+    await measure(undefined)
+    await settle()
+    const seen = asked.length
+    await measure(undefined)
+    await settle()
+    expect(asked.length).toBe(seen) // a measure without a count does not ask
+  })
+
   test('refreshes on the rows a compaction leaves behind, not on ordinary ones', async ($, on) => {
     const { asked } = engine(on)
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
