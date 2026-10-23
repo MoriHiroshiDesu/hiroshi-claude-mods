@@ -1,6 +1,6 @@
 # Configurar o filetree-hiroshi
 
-O plugin tem duas opções: `icons` (ícones de Nerd Fonts na árvore) e `editor` (onde o botão `⧉ abrir` abre os arquivos). Este guia mostra onde mudá-las e o que fazer quando não pegam. O que cada recurso faz está no [README](README.md).
+O plugin tem três opções: `icons` (ícones de Nerd Fonts na árvore), `editor` (onde o botão `⧉ abrir` abre os arquivos) e `width` (largura do painel). Este guia mostra onde mudá-las e o que fazer quando não pegam. O que cada recurso faz está no [README](README.md).
 
 ## Onde mudar
 
@@ -14,7 +14,8 @@ O plugin tem duas opções: `icons` (ícones de Nerd Fonts na árvore) e `editor
     "filetree-hiroshi@hiroshi-claude-mods": {
       "options": {
         "editor": "auto",
-        "icons": "nerd"
+        "icons": "nerd",
+        "width": 50
       }
     }
   }
@@ -68,6 +69,12 @@ Reinicie o terminal. Use a variante **Mono**: a outra desenha ícones mais largo
 
 O `$EDITOR` não entra na conta. Um valor que não seja um desses três vale como `auto`.
 
+## `width`
+
+Quantas colunas o painel pede quando fica ao lado da transcrição (tela cheia). `0` (padrão) deixa o Claude Code escolher a largura. Só vale para um número inteiro maior que zero; qualquer outro valor vale como `0`.
+
+É um pedido, não uma ordem: a largura que você arrasta ou ajusta no próprio painel vale mais, e o painel inline (acima do prompt, fora da tela cheia) ignora a opção. Ela é lida cada vez que o painel abre; depois de mudar, rode `/reload-plugins`.
+
 ## Se algo não funcionou
 
 | Sintoma | O que verificar |
@@ -77,4 +84,5 @@ O `$EDITOR` não entra na conta. Um valor que não seja um desses três vale com
 | Caixinhas só nos logos de IA | A fonte é anterior à 3.5 e o terminal não busca glifos em outras fontes. Use `icons: "nerd-2.3"`. |
 | A tela do Warp some | O Warp precisou de um glifo que só a `Symbols Nerd Font Mono` tem. Use uma Nerd Font como fonte do terminal e não dependa da Symbols. |
 | O `⧉` abre o editor errado | Fixe `editor` em `zed` ou `code`. |
+| O painel não muda de largura com `width` | Você já arrastou o painel para outra largura (essa vale mais), ou a sessão não está em tela cheia. |
 | Mudei e nada mudou | Rode `/reload-plugins`. Ele fecha o painel e o abre de novo. |
