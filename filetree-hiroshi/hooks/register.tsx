@@ -43,7 +43,7 @@ import { moreLabel, project, RELEASE_MS, spreadOut } from './focus'
 import type { FocusRow } from './focus'
 import { codeAt, load, locate, noGit } from './git'
 import type { Run } from './git'
-import { canDrawNewer, focusLabel, iconFor, iconMode, isWarp, newerGlyphsProbe } from './icons'
+import { canDrawNewer, clearLabel, diffsLabel, focusLabel, iconFor, iconMode, isWarp, newerGlyphsProbe } from './icons'
 import type { IconMode } from './icons'
 import {
   ancestors,
@@ -720,7 +720,10 @@ export const register: Register = (on, options) => {
         const total = tailOf(g.lines[t.root], undefined)
         const head = fitRow('', basename(t.root), total.map(part => part.text).join(' '), width)
         const ruleLabel = '─ Alterações '
-        const ruleKeys = p.diffsHidden ? 'c: limpar  d: mostrar' : 'c: limpar  d: ocultar'
+        const nerd = iconsSetting !== 'off'
+        const clearText = clearLabel(nerd)
+        const diffsText = diffsLabel(p.diffsHidden, nerd)
+        const ruleKeys = `c: ${clearText}  d: ${diffsText}`
         // What the focus ring walks, in drawing order, for the ui.focus hook to step past the icons.
         order = [
           ...(p.showTree ? ['focus'] : []),
@@ -842,11 +845,11 @@ export const register: Register = (on, options) => {
                 </Box>
                 <Box>
                   <Button key="clear" plain hotkey="c" onPress={() => void update($, changes, () => [])}>
-                    <Text dimColor>limpar</Text>
+                    <Text dimColor>{clearText}</Text>
                   </Button>
                   <Text> </Text>
                   <Button key="diffs" plain hotkey="d" onPress={() => void update($, panel, cur => ({ ...cur, diffsHidden: !cur.diffsHidden }))}>
-                    <Text dimColor>{p.diffsHidden ? 'mostrar' : 'ocultar'}</Text>
+                    <Text dimColor>{diffsText}</Text>
                   </Button>
                 </Box>
               </Box>
