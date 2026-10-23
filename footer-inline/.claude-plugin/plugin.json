@@ -1,0 +1,8 @@
+{
+  "name": "footer-inline",
+  "version": "0.1.0",
+  "description": "Leva o status do tool-diet para a mesma linha do modo (auto mode on), em vez de uma linha só dele",
+  "author": {
+    "name": "Hiroshi"
+  }
+}
