@@ -699,3 +699,17 @@ test('with icons on, the f button draws a crosshairs for focus and a sitemap for
   expect(await button()).toBe('\uf0e8 foco desligado')
   await ui.unmount()
 })
+
+test('with icons on, the c and d buttons draw a trash, an eye and a crossed eye before their words', { options: { icons: 'nerd' } }, async ($, on) => {
+  engine(on, true, many)
+  await start($)
+  await filetree($)
+  await $.tool.call(edit('/work/README.md') as any)
+  const ui = await mount($)
+  const text = async (key: string) => (await ui.find({ key })).text
+  expect(await text('clear')).toBe('\uf1f8 limpar')
+  expect(await text('diffs')).toBe('\uf070 ocultar')
+  await ui.press({ key: 'diffs' })
+  expect(await text('diffs')).toBe('\uf06e mostrar')
+  await ui.unmount()
+})

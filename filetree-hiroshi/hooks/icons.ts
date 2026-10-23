@@ -214,3 +214,9 @@ export function focusLabel(mode: 'auto' | 'on' | 'off', showing: boolean, nerd: 
   if (mode === 'auto') return showing ? `${mark} foco` : `${mark} completa`
   return `${mark} foco ${mode === 'on' ? 'fixo' : 'desligado'}`
 }
+
+// The labels of the c and d buttons of the changes rule. With icons, a trash (`fa-trash`) for
+// clearing and an eye (`fa-eye`) or a crossed one (`fa-eye-slash`) for showing and hiding them,
+// in front of the word, as in the f button.
+export const clearLabel = (nerd: boolean) => (nerd ? '\uf1f8 limpar' : 'limpar')
+export const diffsLabel = (hidden: boolean, nerd: boolean) => (nerd ? (hidden ? '\uf06e mostrar' : '\uf070 ocultar') : hidden ? 'mostrar' : 'ocultar')
