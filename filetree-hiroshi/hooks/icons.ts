@@ -205,3 +205,12 @@ export const isWarp = (termProgram: string | undefined, warpVersion: string | un
 
 // fc-list prints a line per font that has every glyph asked for.
 export const canDrawNewer = (ran: { exitCode: number; stdout: string } | undefined) => ran?.exitCode === 0 && ran.stdout.trim() !== ''
+
+// The label of the f button. Automatic, the word follows what shows; held by the key, it says so.
+// With icons, a crosshairs (`fa-crosshairs`) for the tree cut down to focus and a sitemap
+// (`fa-sitemap`) for the whole of it, in place of ◉ and ○.
+export function focusLabel(mode: 'auto' | 'on' | 'off', showing: boolean, nerd: boolean): string {
+  const mark = nerd ? (showing ? '\uf05b' : '\uf0e8') : showing ? '◉' : '○'
+  if (mode === 'auto') return showing ? `${mark} foco` : `${mark} completa`
+  return `${mark} foco ${mode === 'on' ? 'fixo' : 'desligado'}`
+}
