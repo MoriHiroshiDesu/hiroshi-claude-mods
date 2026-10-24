@@ -1,3 +1,7 @@
+![git-band e filetree-hiroshi em ação no Claude Code](docs/assets/demo-git-band-filetree.gif)
+
+Acima, o `git-band` e o `filetree-hiroshi` numa sessão real: a faixa do git acompanha as alterações e o commit, e a árvore mostra onde o agente lê e escreve, com os diffs embaixo.
+
 ## Instalar
 
 ```sh
