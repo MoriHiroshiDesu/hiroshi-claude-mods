@@ -1,4 +1,4 @@
-// Fork of hamzafer/claude-code-mods context-bar (MIT). Changes: refresh after a /compact reads the new window (session.append, doors compaction, command and notice); the bar grows while a turn runs (session.measure), not only when it ends.
+// Fork of hamzafer/claude-code-mods context-bar (MIT). Changes: refresh after a /compact reads the new window (a watch on the live window, see watchCompaction); the bar grows while a turn runs (session.measure), not only when it ends.
 // Context Bar: what is filling my context window?
 //   Above the prompt, the window as one stacked bar, a color per category as /context
 //   draws them (system prompt, tools, MCP tools, memory files, skills, messages, free),
@@ -17,6 +17,7 @@ const MESSAGES = '#d97757' // the row that grows, in the accent color
 const FREE = '#808080' // a mid grey thin line reads as empty on dark and light themes alike
 const BUFFER = '#808080'
 const GLYPH = { used: '█', free: '─', buffer: '░' } as const
+const WATCH_MS = 500 // how often the live window is checked for a compaction; the check costs nothing
 
 // Held by the host, so the bar survives a hot reload of this file.
 const reading = atom({ plugin: 'context-bar-hiroshi', key: 'reading' } as const, null as Reading | null)
@@ -26,6 +27,9 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
     measured = undefined
+    seen = undefined
+    watch?.cancel()
+    watch = $.clock.every(WATCH_MS, () => void watchCompaction($).catch(() => {}))
     await $.command.register({ name: 'context-bar', description: 'Show or hide the context window bar above the prompt' }).catch(() => {}) // a name Claude Code already has is refused: start anyway
     const hidden = (await $.store.get('isHidden').catch(() => undefined)) === true
     await update($, isHidden, () => hidden)
@@ -49,16 +53,6 @@ export const register: Register = on => {
       measured = total
       void refreshLive($)
     }
-    return r
-  })
-
-  // A /compact empties the window without a turn ending. `session.compact` answers before the
-  // transcript is swapped, and a plugin that does its own compaction may skip the compaction row,
-  // so the rows a compaction leaves behind (its boundary, the command's record, the notice) are
-  // what we read after: by then the transcript is the new one.
-  on('session.append', async ($, e, next) => {
-    const r = await next(e)
-    if (!e.agentId && (e.door === 'compaction' || e.door === 'command' || e.door === 'notice')) await refresh($).catch(() => {})
     return r
   })
 
@@ -137,6 +131,19 @@ async function refreshLive($: EngineInterface) {
   } finally {
     running = false
   }
+}
+
+// A /compact empties the window without a turn ending, and no event marks the moment. `session.compact`
+// answers before the transcript is swapped, up to seconds before, and a plugin above may answer it
+// without reaching this one; the rows appended meanwhile are read too early too. What does mark it, for
+// any compaction by anyone: the live window's token count goes from a figure to none until the next response.
+let watch: { cancel(): void } | undefined
+let seen: number | undefined // the token count the last check found
+async function watchCompaction($: EngineInterface) {
+  const { tokens } = (await $.session.usage()).context
+  const isCompacted = tokens === undefined && seen !== undefined
+  seen = tokens
+  if (isCompacted) await refresh($)
 }
 
 // Asks the engine for /context's breakdown, estimated locally (no token-count calls).
