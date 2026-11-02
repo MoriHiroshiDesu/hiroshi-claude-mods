@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, mock, test } from 'claude-code/testing'
 
 import { cells, legend, share, toReading, tokens } from '../hooks/register'
 
@@ -33,18 +33,20 @@ const BREAKDOWN = {
 
 // Stands for the engine beneath the mod.
 function engine(on: any, store: Record<string, unknown> = {}) {
-  const asked: unknown[] = []
+  const asked: unknown[] = [] // the breakdowns asked for: the plain check of the live window is free
+  const live = { tokens: 204_000 as number | undefined, breakdown: BREAKDOWN }
+  const clock = mock.clock(on)
   on('session.start', (_$: any, e: any) => ({ sessionId: 's', cwd: e.cwd }))
   on('command.register', () => ({ value: undefined }))
   on('turn.complete', () => ({ text: '' }))
   on('store.get', (_$: any, e: any) => ({ value: store[e.key] }))
   on('store.set', (_$: any, e: any) => ((store[e.key] = e.value), { value: undefined }))
   on('session.usage', (_$: any, e: any) => {
-    asked.push(e)
-    return { value: { startedAt: 0, context: { tokens: 204_000, window: 1_000_000, percent: 20, breakdown: BREAKDOWN }, rateLimits: {}, cost: { usd: 0 } } }
+    if (e.breakdown) asked.push(e)
+    return { value: { startedAt: 0, context: { tokens: live.tokens, window: 1_000_000, percent: 20, breakdown: live.breakdown }, rateLimits: {}, cost: { usd: 0 } } }
   })
   on('ui.render', ($: any, e: any) => $.ui.resolve(e).Text({ children: 'band below' }))
-  return { asked, store }
+  return { asked, store, live, clock }
 }
 
 const settle = () => new Promise(done => (globalThis as any).setTimeout(done, 20)) // the first refresh runs in the background
@@ -138,21 +140,35 @@ describe('context-bar', () => {
     expect(asked.length).toBe(seen) // a measure without a count does not ask
   })
 
-  test('refreshes on the rows a compaction leaves behind, not on ordinary ones', async ($, on) => {
-    const { asked } = engine(on)
+  test('redraws once when a compaction empties the live window, with no event to mark it', async ($, on) => {
+    const { asked, live, clock } = engine(on)
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
     await settle()
-    const row = (door: string, agentId?: string) =>
-      ({ door, agentId, uuid: 'u', origin: { kind: 'engine' }, message: { type: 'user', role: 'user', content: [{ type: 'text', text: 'summary' }] } }) as any
-    await $.session.append(row('response'))
+    await clock.advance(500) // a check sees the live window's figure
     await settle()
-    expect(asked.length).toBe(1) // an ordinary row does not ask
-    await $.session.append(row('compaction', 'a1'))
+    expect(asked.length).toBe(1) // while the figure stands, nothing is asked
+
+    live.tokens = undefined
+    live.breakdown = { ...BREAKDOWN, totalTokens: 30_000, percentage: 3 }
+    await clock.advance(500)
     await settle()
-    expect(asked.length).toBe(1) // nor a subagent's
-    for (const door of ['compaction', 'command', 'notice']) await $.session.append(row(door))
+    expect(asked.length).toBe(2)
+    await clock.advance(500)
     await settle()
-    expect(asked.length).toBe(4)
+    expect(asked.length).toBe(2) // once: the next check finds nothing new
+    const band = await $.ui.mount({ plugin: 'context-bar-hiroshi', surface: 'terminal', ...BAND } as any)
+    expect(await band.find({ type: 'Text', text: /30k of 1M/ })).toBeDefined()
+    await band.unmount()
+  })
+
+  test('a session with no response yet is no compaction', async ($, on) => {
+    const { asked, live, clock } = engine(on)
+    live.tokens = undefined
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' } as any)
+    await settle()
+    await clock.advance(500)
+    await settle()
+    expect(asked.length).toBe(1)
   })
 
   test('/context-bar hides and shows it, and remembers the choice', async ($, on) => {
